@@ -1,0 +1,9 @@
+node_modules/
+.env
+
+# Real data shouldn't live in the repo — the app auto-creates these
+# with sane defaults on first run. In Coolify, these paths are mounted
+# as persistent volumes instead (see README).
+data/*.json
+pdfs/**/*.pdf
+!pdfs/**/.gitkeep

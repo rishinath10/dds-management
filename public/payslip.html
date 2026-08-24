@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDS Marine — Payslip Generator</title>
+<style>
+  :root{
+    --navy:#0E2240;
+    --navy-light:#16305c;
+    --gold:#C8973F;
+    --gold-light:#e0b968;
+    --cream:#F7F3EA;
+    --ink:#1c1c1c;
+    --muted:#6b7280;
+    --line:#e3ddcd;
+    --danger:#b3261e;
+    --ok:#1b6e3c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+  }
+  .topbar{
+    background:var(--navy);
+    color:#fff;
+    padding:18px 28px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .topbar .logo-mini{
+    width:40px;height:40px;border-radius:50%;
+    background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    border:2px solid var(--gold);
+    flex-shrink:0;
+  }
+  .topbar .logo-mini svg{width:26px;height:26px;}
+  .topbar h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.3px;}
+  .topbar p{margin:0;font-size:12px;color:var(--gold-light);}
+
+  .layout{
+    display:grid;
+    grid-template-columns:260px 1fr;
+    gap:0;
+    min-height:calc(100vh - 76px);
+  }
+  @media (max-width:820px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  .sidebar{
+    background:#fff;
+    border-right:1px solid var(--line);
+    padding:20px 16px;
+  }
+  .sidebar h3{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--muted);
+    margin:0 0 10px 4px;
+  }
+  .staff-card{
+    padding:10px 12px;
+    border-radius:8px;
+    margin-bottom:6px;
+    cursor:pointer;
+    border:1px solid transparent;
+    transition:.15s;
+  }
+  .staff-card:hover{background:var(--cream);}
+  .staff-card.active{
+    background:var(--navy);
+    color:#fff;
+  }
+  .staff-card .nm{font-weight:600;font-size:14px;}
+  .staff-card .rl{font-size:12px;color:var(--muted);}
+  .staff-card.active .rl{color:var(--gold-light);}
+  .add-staff-btn{
+    width:100%;
+    margin-top:8px;
+    padding:10px;
+    border-radius:8px;
+    border:1.5px dashed var(--gold);
+    background:transparent;
+    color:var(--navy);
+    font-weight:600;
+    cursor:pointer;
+    font-size:13px;
+  }
+  .add-staff-btn:hover{background:#fff8ea;}
+
+  .main{padding:24px 28px;max-width:900px;}
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:22px 24px;
+    margin-bottom:18px;
+  }
+  .card h2{
+    font-size:16px;
+    margin:0 0 4px 0;
+    color:var(--navy);
+  }
+  .card .sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin:0 0 16px 0;
+  }
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media (max-width:600px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--navy);
+    margin-bottom:5px;
+  }
+  input[type=text], input[type=number], input[type=month], select, textarea{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid #d7d2c2;
+    border-radius:7px;
+    font-size:14px;
+    font-family:inherit;
+    background:#fff;
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:none;
+    border-color:var(--gold);
+    box-shadow:0 0 0 3px rgba(200,151,63,.15);
+  }
+  .field{margin-bottom:14px;}
+  .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+  .dyn-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;}
+  .dyn-row input{flex:1;}
+  .dyn-row .amt{max-width:130px;}
+  .rm-btn{
+    background:none;border:none;color:var(--danger);cursor:pointer;
+    font-size:18px;line-height:1;padding:4px 8px;
+  }
+  .add-line-btn{
+    background:none;border:1px dashed var(--muted);color:var(--muted);
+    padding:6px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;
+  }
+  .add-line-btn:hover{border-color:var(--gold);color:var(--navy);}
+
+  .summary-box{
+    background:var(--navy);
+    color:#fff;
+    border-radius:12px;
+    padding:20px 22px;
+    position:sticky;
+    top:16px;
+  }
+  .summary-box .row{
+    display:flex;justify-content:space-between;
+    font-size:13.5px;padding:5px 0;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .summary-box .row.total{
+    border-bottom:none;
+    border-top:1px solid var(--gold);
+    margin-top:8px;padding-top:12px;
+    font-size:17px;font-weight:700;color:var(--gold-light);
+  }
+  .summary-box .section-title{
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--gold-light);margin:14px 0 4px 0;
+  }
+  .summary-box .section-title:first-child{margin-top:0;}
+
+  .btn{
+    padding:11px 20px;
+    border-radius:8px;
+    border:none;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{background:var(--navy-light);}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-gold:hover{background:#b6842f;}
+  .btn-outline{background:#fff;border:1.5px solid var(--navy);color:var(--navy);}
+  .btn-outline:hover{background:var(--cream);}
+  .btn-text{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+
+  .hidden{display:none !important;}
+  .empty-state{
+    text-align:center;padding:60px 20px;color:var(--muted);
+  }
+  .empty-state .big-icon{font-size:40px;margin-bottom:10px;}
+
+  /* ===== Payslip document (letterhead) ===== */
+  .payslip-wrap{display:flex;justify-content:center;padding:10px 0 30px 0;}
+  #payslipDoc{
+    width:210mm;
+    min-height:270mm;
+    background:#fff;
+    padding:16mm 16mm 14mm 16mm;
+    box-shadow:0 4px 24px rgba(0,0,0,.12);
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    color:var(--ink);
+  }
+  .ps-header{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    border-bottom:3px solid var(--gold);
+    padding-bottom:14px;margin-bottom:18px;
+  }
+  .ps-brand{display:flex;gap:14px;align-items:center;}
+  .ps-logo{
+    width:64px;height:64px;border-radius:50%;
+    background:#fff;border:3px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .ps-logo svg{width:42px;height:42px;}
+  .ps-brand-text .cname{font-size:17px;font-weight:700;color:var(--navy);letter-spacing:.2px;}
+  .ps-brand-text .caddr{font-size:10.5px;color:var(--muted);max-width:340px;line-height:1.4;margin-top:2px;}
+  .ps-title{text-align:right;}
+  .ps-title .t1{font-size:20px;font-weight:700;color:var(--navy);letter-spacing:.5px;}
+  .ps-title .t2{font-size:11.5px;color:var(--gold);font-weight:600;margin-top:2px;}
+  .ps-title .t3{font-size:10.5px;color:var(--muted);margin-top:6px;}
+
+  .ps-emp-table{
+    width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12.5px;
+  }
+  .ps-emp-table td{padding:4px 0;vertical-align:top;}
+  .ps-emp-table td.lbl{color:var(--muted);width:110px;}
+  .ps-emp-table td.val{font-weight:600;color:var(--ink);}
+
+  .ps-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .ps-block h4{
+    font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+    color:#fff;background:var(--navy);
+    margin:0 0 0 0;padding:7px 10px;border-radius:6px 6px 0 0;
+  }
+  .ps-block table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-top:none;}
+  .ps-block table tr td{padding:7px 10px;font-size:12.5px;border-bottom:1px solid var(--line);}
+  .ps-block table tr td:last-child{text-align:right;font-variant-numeric:tabular-nums;}
+  .ps-block table tr.total-row td{font-weight:700;background:#faf7ef;color:var(--navy);}
+
+  .ps-net{
+    margin-top:18px;
+    background:var(--cream);
+    border:1.5px solid var(--gold);
+    border-radius:8px;
+    padding:14px 18px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .ps-net .lbl{font-size:13px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;}
+  .ps-net .val{font-size:22px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;}
+
+  .ps-employer-note{
+    margin-top:16px;font-size:10.5px;color:var(--muted);
+    border-top:1px dashed var(--line);padding-top:10px;
+  }
+  .ps-employer-note table{width:100%;font-size:10.5px;margin-top:4px;}
+  .ps-employer-note td{padding:2px 0;}
+  .ps-employer-note td:last-child{text-align:right;}
+
+  .ps-footer{
+    margin-top:26px;font-size:9.5px;color:var(--muted);text-align:center;
+    border-top:1px solid var(--line);padding-top:10px;
+  }
+
+  @media print{
+    body *{visibility:hidden;}
+    #payslipDoc, #payslipDoc *{visibility:visible;}
+    #payslipDoc{
+      position:absolute;left:0;top:0;box-shadow:none;width:100%;padding:10mm;
+    }
+    .payslip-wrap{padding:0;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="display:flex;align-items:center;text-decoration:none;color:inherit;" title="Back to Dashboard">
+    <div class="logo-mini">
+      <img src="/assets/dds-logo-mark.png" alt="DDS" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+    </div>
+  </a>
+  <div>
+    <h1>DDS Marine — Payslip Generator</h1>
+    <p>Simple monthly payslips with auto-calculated EPF / SOCSO / EIS · <a href="/" style="color:var(--gold-light);">← Dashboard</a></p>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR: staff list -->
+  <div class="sidebar">
+    <h3>Staff</h3>
+    <div id="staffListEl"></div>
+    <button class="add-staff-btn" id="addStaffBtn">+ Add Staff</button>
+
+    <h3 style="margin-top:28px;">Company Details</h3>
+    <button class="add-staff-btn" id="editCompanyBtn" style="border-style:solid;">Edit Letterhead Info</button>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <div id="emptyState" class="empty-state">
+      <div class="big-icon">🧾</div>
+      <p>Add your first staff member on the left to get started.</p>
+    </div>
+
+    <!-- Company settings form -->
+    <div class="card hidden" id="companyFormCard">
+      <h2>Company / Letterhead Details</h2>
+      <p class="sub">This appears on every payslip. Fill it once — it's saved automatically.</p>
+      <div class="field">
+        <label>Company Name</label>
+        <input type="text" id="coName" value="DDS Marine Energy Services Sdn Bhd">
+      </div>
+      <div class="field">
+        <label>Company Registration No. (SSM)</label>
+        <input type="text" id="coRegNo" placeholder="e.g. 202601012345 (1234567-X)">
+      </div>
+      <div class="field">
+        <label>Registered / Office Address</label>
+        <textarea id="coAddress" rows="2" placeholder="Full address as on letterhead"></textarea>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>EPF Employer Reference No.</label>
+          <input type="text" id="coEpfNo">
+        </div>
+        <div class="field">
+          <label>SOCSO/EIS Employer Code</label>
+          <input type="text" id="coSocsoNo">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveCompanyBtn">Save</button>
+        <button class="btn btn-text" id="closeCompanyBtn">Close</button>
+      </div>
+    </div>
+
+    <!-- Staff profile form -->
+    <div class="card hidden" id="staffFormCard">
+      <h2 id="staffFormTitle">Add Staff</h2>
+      <p class="sub">Basic profile — saved so you only enter this once per person.</p>
+      <div class="grid2">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="empName">
+        </div>
+        <div class="field">
+          <label>Position / Designation</label>
+          <input type="text" id="empPosition">
+        </div>
+      </div>
+      <div class="grid3">
+        <div class="field">
+          <label>Staff ID</label>
+          <input type="text" id="empStaffId">
+        </div>
+        <div class="field">
+          <label>NRIC No.</label>
+          <input type="text" id="empIc">
+        </div>
+        <div class="field">
+          <label>Basic Monthly Salary (RM)</label>
+          <input type="number" id="empBasic" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>Bank Name</label>
+          <input type="text" id="empBank">
+        </div>
+        <div class="field">
+          <label>Bank Account No.</label>
+          <input type="text" id="empBankAcc">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>EPF No.</label>
+          <input type="text" id="empEpfNo">
+        </div>
+        <div class="field">
+          <label>SOCSO/EIS No.</label>
+          <input type="text" id="empSocsoNo">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveStaffBtn">Save Staff</button>
+        <button class="btn btn-text" id="cancelStaffBtn">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Pay run form + live summary -->
+    <div class="hidden" id="payRunArea">
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 id="payRunHeading" style="margin-bottom:0;">Pay Run</h2>
+          <p class="sub" style="margin-bottom:0;" id="payRunSub"></p>
+        </div>
+        <button class="btn btn-text" id="editThisStaffBtn">Edit staff profile</button>
+      </div>
+
+      <div class="card">
+        <h2>This Month's Pay</h2>
+        <div class="grid3">
+          <div class="field">
+            <label>Pay Period (Month)</label>
+            <input type="month" id="payMonth">
+          </div>
+          <div class="field">
+            <label>Payment Date</label>
+            <input type="date" id="payDate">
+          </div>
+          <div class="field">
+            <label>Basic Salary (RM)</label>
+            <input type="number" id="rBasic" step="0.01">
+          </div>
+        </div>
+        <p class="hint" style="margin-top:-8px;">Basic salary is pre-filled from the staff profile — adjust if it changed this month.</p>
+
+        <label style="margin-top:6px;">Allowances</label>
+        <div id="allowanceRows"></div>
+        <button class="add-line-btn" id="addAllowanceBtn">+ Add allowance line</button>
+
+        <div class="grid3" style="margin-top:16px;">
+          <div class="field">
+            <label>OT Hours (optional)</label>
+            <input type="number" id="otHours" step="0.5" min="0" placeholder="0">
+          </div>
+          <div class="field">
+            <label>OT Rate / Hour (RM)</label>
+            <input type="number" id="otRate" step="0.01" min="0" placeholder="0">
+          </div>
+          <div class="field">
+            <label>OT Amount (RM)</label>
+            <input type="number" id="otAmount" step="0.01" min="0" placeholder="0">
+            <p class="hint">Auto-fills from hours × rate, or type directly.</p>
+          </div>
+        </div>
+
+        <div class="field" style="max-width:260px;">
+          <label>Commission (RM)</label>
+          <input type="number" id="rCommission" step="0.01" min="0" placeholder="0">
+        </div>
+
+        <label style="margin-top:6px;">Other Deductions <span style="font-weight:400;color:var(--muted);">(unpaid leave, advances, etc.)</span></label>
+        <div id="deductionRows"></div>
+        <button class="add-line-btn" id="addDeductionBtn">+ Add deduction line</button>
+
+        <div class="field" style="margin-top:18px;">
+          <label>Remarks <span style="font-weight:400;color:var(--muted);">(optional — e.g. leave taken, notes for this payslip)</span></label>
+          <input type="text" id="payRemarks" placeholder="e.g. 1 Day Paid MC (No Deduction)">
+        </div>
+      </div>
+
+      <div class="grid2" style="align-items:start;">
+        <div class="card">
+          <h2>Notes</h2>
+          <p class="sub">EPF/SOCSO/EIS are calculated by percentage (not the official rounding tables), so figures may differ by a ringgit or two near month-end. Cross-check against the official KWSP/PERKESO tables before remitting if exact figures matter.</p>
+          <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;line-height:1.7;">
+            <li>EPF wages = Basic + Allowances + Commission (OT excluded)</li>
+            <li>SOCSO/EIS wages = Basic + Allowances + OT + Commission, capped at RM6,000</li>
+            <li>PCB / income tax is <strong>not</strong> included — add manually if required.</li>
+          </ul>
+        </div>
+
+        <div class="summary-box">
+          <div class="section-title">Earnings</div>
+          <div class="row"><span>Basic</span><span id="sumBasic">RM 0.00</span></div>
+          <div class="row"><span>Allowances</span><span id="sumAllow">RM 0.00</span></div>
+          <div class="row"><span>OT</span><span id="sumOt">RM 0.00</span></div>
+          <div class="row"><span>Commission</span><span id="sumComm">RM 0.00</span></div>
+          <div class="section-title">Deductions</div>
+          <div class="row"><span>EPF (employee)</span><span id="sumEpfE">RM 0.00</span></div>
+          <div class="row"><span>SOCSO (employee)</span><span id="sumSocsoE">RM 0.00</span></div>
+          <div class="row"><span>EIS (employee)</span><span id="sumEisE">RM 0.00</span></div>
+          <div class="row"><span>Other deductions</span><span id="sumOtherD">RM 0.00</span></div>
+          <div class="row total"><span>Net Pay</span><span id="sumNet">RM 0.00</span></div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin:4px 0 30px 0;">
+        <button class="btn btn-gold" id="generateBtn">Generate Payslip →</button>
+      </div>
+    </div>
+
+    <!-- Payslip preview -->
+    <div class="hidden" id="previewArea">
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-outline" id="backToEditBtn">← Back to Edit</button>
+        <button class="btn btn-gold" id="downloadPdfBtn">Download PDF</button>
+        <button class="btn btn-outline" id="printBtn">Print</button>
+        <button class="btn btn-primary" id="saveHistoryBtn">Save to Archive (→ Drive)</button>
+      </div>
+      <div class="payslip-wrap">
+        <div id="payslipDoc"><!-- populated by JS --></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------- API helpers (talk to the Express backend instead of window.storage) ----------
+  async function apiGet(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('GET '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+  async function apiPost(url, body){
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!r.ok) throw new Error('POST '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+
+  // ---------- state ----------
+  let employees = [];       // [{id,name,position,staffId,ic,basic,bank,bankAcc,epfNo,socsoNo}]
+  let selectedEmpId = null;
+  let company = { name:'DDS Marine Energy Services Sdn Bhd', regNo:'', address:'', epfNo:'', socsoNo:'' };
+  let currentPayslip = null; // built object used to render preview
+
+  const $ = id => document.getElementById(id);
+  const rm = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const round2 = n => Math.round((Number(n)||0) * 100) / 100;
+
+  // ---------- statutory calculations ----------
+  function calcEPF(wage){
+    const employee = round2(wage * 0.11);
+    const employerRate = wage <= 5000 ? 0.13 : 0.12;
+    const employer = round2(wage * employerRate);
+    return {employee, employer};
+  }
+  function calcSOCSO(wage){
+    const capped = Math.min(wage, 6000);
+    return { employee: round2(capped*0.005), employer: round2(capped*0.0175) };
+  }
+  function calcEIS(wage){
+    const capped = Math.min(wage, 6000);
+    return { employee: round2(capped*0.002), employer: round2(capped*0.002) };
+  }
+
+  // ---------- init ----------
+  async function init(){
+    try{
+      employees = await apiGet('/api/employees');
+    }catch(e){
+      console.error(e);
+      employees = [];
+    }
+    try{
+      const co = await apiGet('/api/company');
+      if(co && Object.keys(co).length) company = co;
+    }catch(e){
+      console.error(e);
+    }
+
+    renderStaffList();
+    if(employees.length){
+      selectEmployee(employees[0].id);
+    } else {
+      $('emptyState').classList.remove('hidden');
+    }
+  }
+
+  // ---------- staff list rendering ----------
+  function renderStaffList(){
+    const el = $('staffListEl');
+    el.innerHTML = '';
+    employees.forEach(e=>{
+      const div = document.createElement('div');
+      div.className = 'staff-card' + (e.id===selectedEmpId ? ' active' : '');
+      div.innerHTML = `<div class="nm">${escapeHtml(e.name||'Unnamed')}</div><div class="rl">${escapeHtml(e.position||'')}</div>`;
+      div.onclick = ()=> selectEmployee(e.id);
+      el.appendChild(div);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function selectEmployee(id){
+    selectedEmpId = id;
+    hideAllPanels();
+    renderStaffList();
+    const emp = employees.find(e=>e.id===id);
+    if(!emp) return;
+    $('emptyState').classList.add('hidden');
+    openPayRun(emp);
+  }
+
+  function hideAllPanels(){
+    $('emptyState').classList.add('hidden');
+    $('companyFormCard').classList.add('hidden');
+    $('staffFormCard').classList.add('hidden');
+    $('payRunArea').classList.add('hidden');
+    $('previewArea').classList.add('hidden');
+  }
+
+  // ---------- company settings ----------
+  $('editCompanyBtn').onclick = ()=>{
+    hideAllPanels();
+    $('coName').value = company.name || '';
+    $('coRegNo').value = company.regNo || '';
+    $('coAddress').value = company.address || '';
+    $('coEpfNo').value = company.epfNo || '';
+    $('coSocsoNo').value = company.socsoNo || '';
+    $('companyFormCard').classList.remove('hidden');
+  };
+  $('closeCompanyBtn').onclick = ()=>{
+    if(selectedEmpId) selectEmployee(selectedEmpId); else hideAllPanels(), $('emptyState').classList.remove('hidden');
+  };
+  $('saveCompanyBtn').onclick = async ()=>{
+    company = {
+      name: $('coName').value.trim(),
+      regNo: $('coRegNo').value.trim(),
+      address: $('coAddress').value.trim(),
+      epfNo: $('coEpfNo').value.trim(),
+      socsoNo: $('coSocsoNo').value.trim()
+    };
+    try{
+      await apiPost('/api/company', company);
+    }catch(e){
+      console.error(e);
+      alert('Could not save company details — check the server is running.');
+      return;
+    }
+    $('closeCompanyBtn').click();
+  };
+
+  // ---------- staff add/edit ----------
+  $('addStaffBtn').onclick = ()=> openStaffForm(null);
+  $('cancelStaffBtn').onclick = ()=>{
+    if(selectedEmpId) selectEmployee(selectedEmpId); else { hideAllPanels(); $('emptyState').classList.remove('hidden'); }
+  };
+  $('editThisStaffBtn').onclick = ()=>{
+    const emp = employees.find(e=>e.id===selectedEmpId);
+    if(emp) openStaffForm(emp);
+  };
+
+  function openStaffForm(emp){
+    hideAllPanels();
+    $('staffFormTitle').textContent = emp ? 'Edit Staff' : 'Add Staff';
+    $('empName').value = emp ? emp.name : '';
+    $('empPosition').value = emp ? emp.position : '';
+    $('empStaffId').value = emp ? emp.staffId : '';
+    $('empIc').value = emp ? emp.ic : '';
+    $('empBasic').value = emp ? emp.basic : '';
+    $('empBank').value = emp ? emp.bank : '';
+    $('empBankAcc').value = emp ? emp.bankAcc : '';
+    $('empEpfNo').value = emp ? emp.epfNo : '';
+    $('empSocsoNo').value = emp ? emp.socsoNo : '';
+    $('staffFormCard').dataset.editingId = emp ? emp.id : '';
+    $('staffFormCard').classList.remove('hidden');
+  }
+
+  $('saveStaffBtn').onclick = async ()=>{
+    const editingId = $('staffFormCard').dataset.editingId;
+    const profile = {
+      id: editingId || undefined,
+      name: $('empName').value.trim(),
+      position: $('empPosition').value.trim(),
+      staffId: $('empStaffId').value.trim(),
+      ic: $('empIc').value.trim(),
+      basic: Number($('empBasic').value)||0,
+      bank: $('empBank').value.trim(),
+      bankAcc: $('empBankAcc').value.trim(),
+      epfNo: $('empEpfNo').value.trim(),
+      socsoNo: $('empSocsoNo').value.trim()
+    };
+    if(!profile.name){ alert('Please enter a name.'); return; }
+    let saved;
+    try{
+      saved = await apiPost('/api/employees', profile);
+    }catch(e){
+      console.error(e);
+      alert('Could not save staff — check the server is running.');
+      return;
+    }
+    const i = employees.findIndex(e=>e.id===saved.id);
+    if(i>-1) employees[i] = saved; else employees.push(saved);
+    selectEmployee(saved.id);
+  };
+
+  // ---------- pay run ----------
+  let allowanceLines = [];
+  let deductionLines = [];
+
+  function openPayRun(emp){
+    $('payRunHeading').textContent = 'Pay Run — ' + emp.name;
+    $('payRunSub').textContent = (emp.position||'') + (emp.staffId ? ' · Staff ID: '+emp.staffId : '');
+    const now = new Date();
+    $('payMonth').value = now.toISOString().slice(0,7);
+    $('payDate').value = now.toISOString().slice(0,10);
+    $('rBasic').value = emp.basic || 0;
+    $('otHours').value = '';
+    $('otRate').value = '';
+    $('otAmount').value = '';
+    $('rCommission').value = '';
+    $('payRemarks').value = '';
+    allowanceLines = [{label:'', amount:0}];
+    deductionLines = [];
+    renderAllowanceRows();
+    renderDeductionRows();
+    $('payRunArea').classList.remove('hidden');
+    updateSummary();
+  }
+
+  function renderAllowanceRows(){
+    const wrap = $('allowanceRows');
+    wrap.innerHTML = '';
+    allowanceLines.forEach((line, i)=>{
+      const row = document.createElement('div');
+      row.className = 'dyn-row';
+      row.innerHTML = `
+        <input type="text" placeholder="e.g. Transport" value="${escapeHtml(line.label)}" data-idx="${i}" class="allow-label">
+        <input type="number" step="0.01" min="0" placeholder="0.00" value="${line.amount||''}" data-idx="${i}" class="amt allow-amt">
+        <button class="rm-btn" data-idx="${i}" title="Remove">×</button>
+      `;
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll('.allow-label').forEach(el=> el.oninput = e=>{ allowanceLines[e.target.dataset.idx].label = e.target.value; });
+    wrap.querySelectorAll('.allow-amt').forEach(el=> el.oninput = e=>{ allowanceLines[e.target.dataset.idx].amount = Number(e.target.value)||0; updateSummary(); });
+    wrap.querySelectorAll('.rm-btn').forEach(el=> el.onclick = e=>{ allowanceLines.splice(e.target.dataset.idx,1); renderAllowanceRows(); updateSummary(); });
+  }
+  $('addAllowanceBtn').onclick = ()=>{ allowanceLines.push({label:'',amount:0}); renderAllowanceRows(); };
+
+  function renderDeductionRows(){
+    const wrap = $('deductionRows');
+    wrap.innerHTML = '';
+    deductionLines.forEach((line, i)=>{
+      const row = document.createElement('div');
+      row.className = 'dyn-row';
+      row.innerHTML = `
+        <input type="text" placeholder="e.g. Unpaid leave (1 day)" value="${escapeHtml(line.label)}" data-idx="${i}" class="ded-label">
+        <input type="number" step="0.01" min="0" placeholder="0.00" value="${line.amount||''}" data-idx="${i}" class="amt ded-amt">
+        <button class="rm-btn" data-idx="${i}" title="Remove">×</button>
+      `;
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll('.ded-label').forEach(el=> el.oninput = e=>{ deductionLines[e.target.dataset.idx].label = e.target.value; });
+    wrap.querySelectorAll('.ded-amt').forEach(el=> el.oninput = e=>{ deductionLines[e.target.dataset.idx].amount = Number(e.target.value)||0; updateSummary(); });
+    wrap.querySelectorAll('.rm-btn').forEach(el=> el.onclick = e=>{ deductionLines.splice(e.target.dataset.idx,1); renderDeductionRows(); updateSummary(); });
+  }
+  $('addDeductionBtn').onclick = ()=>{ deductionLines.push({label:'',amount:0}); renderDeductionRows(); };
+
+  // OT hours*rate -> amount auto-fill
+  function autoFillOt(){
+    const h = Number($('otHours').value)||0;
+    const r = Number($('otRate').value)||0;
+    if(h>0 && r>0){ $('otAmount').value = round2(h*r); }
+    updateSummary();
+  }
+  $('otHours').oninput = autoFillOt;
+  $('otRate').oninput = autoFillOt;
+  $('otAmount').oninput = updateSummary;
+  $('rBasic').oninput = updateSummary;
+  $('rCommission').oninput = updateSummary;
+
+  function computePayslip(){
+    const basic = Number($('rBasic').value)||0;
+    const allowTotal = round2(allowanceLines.reduce((s,l)=>s+(Number(l.amount)||0),0));
+    const otAmt = Number($('otAmount').value)||0;
+    const comm = Number($('rCommission').value)||0;
+    const otherDedTotal = round2(deductionLines.reduce((s,l)=>s+(Number(l.amount)||0),0));
+
+    const epfWage = round2(basic + allowTotal + comm);
+    const socsoEisWage = round2(basic + allowTotal + otAmt + comm);
+
+    const epf = calcEPF(epfWage);
+    const socso = calcSOCSO(socsoEisWage);
+    const eis = calcEIS(socsoEisWage);
+
+    const gross = round2(basic + allowTotal + otAmt + comm);
+    const totalDeductions = round2(epf.employee + socso.employee + eis.employee + otherDedTotal);
+    const net = round2(gross - totalDeductions);
+
+    return {
+      basic, allowTotal, allowanceLines: allowanceLines.filter(l=>l.amount>0 || l.label),
+      otAmt, comm, otherDedTotal, deductionLines: deductionLines.filter(l=>l.amount>0 || l.label),
+      epf, socso, eis, gross, totalDeductions, net,
+      payMonth: $('payMonth').value,
+      payDate: $('payDate').value,
+      remarks: $('payRemarks').value.trim()
+    };
+  }
+
+  function updateSummary(){
+    const p = computePayslip();
+    $('sumBasic').textContent = rm(p.basic);
+    $('sumAllow').textContent = rm(p.allowTotal);
+    $('sumOt').textContent = rm(p.otAmt);
+    $('sumComm').textContent = rm(p.comm);
+    $('sumEpfE').textContent = rm(p.epf.employee);
+    $('sumSocsoE').textContent = rm(p.socso.employee);
+    $('sumEisE').textContent = rm(p.eis.employee);
+    $('sumOtherD').textContent = rm(p.otherDedTotal);
+    $('sumNet').textContent = rm(p.net);
+  }
+
+  // re-run summary whenever a dyn row amount changes (already bound above) or on load
+  document.addEventListener('input', (e)=>{
+    if(e.target.closest('#payRunArea')) updateSummary();
+  });
+
+  // ---------- generate payslip preview ----------
+  $('generateBtn').onclick = ()=>{
+    const emp = employees.find(e=>e.id===selectedEmpId);
+    if(!emp) return;
+    if(!$('payMonth').value){ alert('Please select a pay period (month).'); return; }
+    currentPayslip = computePayslip();
+    renderPayslipDoc(emp, currentPayslip);
+    hideAllPanels();
+    $('previewArea').classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+
+  $('backToEditBtn').onclick = ()=>{
+    hideAllPanels();
+    $('payRunArea').classList.remove('hidden');
+  };
+
+  function monthLabel(ym){
+    if(!ym) return '';
+    const [y,m] = ym.split('-');
+    const d = new Date(Number(y), Number(m)-1, 1);
+    return d.toLocaleDateString('en-MY', {month:'long', year:'numeric'});
+  }
+
+  function dateLabel(ymd){
+    if(!ymd) return '—';
+    const [y,m,d] = ymd.split('-');
+    const dt = new Date(Number(y), Number(m)-1, Number(d));
+    return dt.toLocaleDateString('en-MY', {day:'2-digit', month:'long', year:'numeric'});
+  }
+
+  function renderPayslipDoc(emp, p){
+    const logoImg = `<img src="/assets/dds-logo-mark.png" alt="DDS" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+
+    const allowRows = p.allowanceLines.length
+      ? p.allowanceLines.map(l=>`<tr><td>${escapeHtml(l.label||'Allowance')}</td><td>${rm(l.amount)}</td></tr>`).join('')
+      : '';
+    const dedRows = p.deductionLines.length
+      ? p.deductionLines.map(l=>`<tr><td>${escapeHtml(l.label||'Other deduction')}</td><td>${rm(l.amount)}</td></tr>`).join('')
+      : '';
+
+    const ref = `DDS/PS/${(p.payMonth||'').replace('-','')}/${escapeHtml(emp.staffId||emp.id.slice(-4))}`;
+    const remarksRow = p.remarks ? `<tr><td>Remarks</td><td style="text-align:left;font-weight:400;color:var(--muted);">${escapeHtml(p.remarks)}</td></tr>` : '';
+
+    $('payslipDoc').innerHTML = `
+      <div class="ps-header">
+        <div class="ps-brand">
+          <div class="ps-logo">${logoImg}</div>
+          <div class="ps-brand-text">
+            <div class="cname">${escapeHtml(company.name)}</div>
+            <div class="caddr">${escapeHtml(company.address||'')}${company.regNo ? '<br>Reg. No: '+escapeHtml(company.regNo) : ''}</div>
+          </div>
+        </div>
+        <div class="ps-title">
+          <div class="t1">PAYSLIP</div>
+          <div class="t2">${escapeHtml(monthLabel(p.payMonth))}</div>
+          <div class="t3">Ref: ${ref}</div>
+        </div>
+      </div>
+
+      <table class="ps-emp-table">
+        <tr>
+          <td class="lbl">Employee Name</td><td class="val">${escapeHtml(emp.name)}</td>
+          <td class="lbl">Staff ID</td><td class="val">${escapeHtml(emp.staffId||'—')}</td>
+        </tr>
+        <tr>
+          <td class="lbl">Position</td><td class="val">${escapeHtml(emp.position||'—')}</td>
+          <td class="lbl">NRIC No.</td><td class="val">${escapeHtml(emp.ic||'—')}</td>
+        </tr>
+        <tr>
+          <td class="lbl">Pay Period</td><td class="val">${escapeHtml(monthLabel(p.payMonth))}</td>
+          <td class="lbl">Payment Date</td><td class="val">${dateLabel(p.payDate)}</td>
+        </tr>
+        <tr>
+          <td class="lbl">Bank</td><td class="val">${escapeHtml(emp.bank||'—')}</td>
+          <td class="lbl">Account No.</td><td class="val">${escapeHtml(emp.bankAcc||'—')}</td>
+        </tr>
+        <tr>
+          <td class="lbl">EPF No.</td><td class="val">${escapeHtml(emp.epfNo||'—')}</td>
+          <td class="lbl">SOCSO/EIS No.</td><td class="val">${escapeHtml(emp.socsoNo||'—')}</td>
+        </tr>
+      </table>
+
+      <div class="ps-cols">
+        <div class="ps-block">
+          <h4>Earnings</h4>
+          <table>
+            <tr><td>Basic Salary</td><td>${rm(p.basic)}</td></tr>
+            ${allowRows}
+            <tr><td>Overtime</td><td>${rm(p.otAmt)}</td></tr>
+            <tr><td>Commission</td><td>${rm(p.comm)}</td></tr>
+            ${remarksRow}
+            <tr class="total-row"><td>Gross Earnings</td><td>${rm(p.gross)}</td></tr>
+          </table>
+        </div>
+        <div class="ps-block">
+          <h4>Deductions</h4>
+          <table>
+            <tr><td>EPF (Employee)</td><td>${rm(p.epf.employee)}</td></tr>
+            <tr><td>SOCSO (Employee)</td><td>${rm(p.socso.employee)}</td></tr>
+            <tr><td>EIS (Employee)</td><td>${rm(p.eis.employee)}</td></tr>
+            ${dedRows}
+            <tr class="total-row"><td>Total Deductions</td><td>${rm(p.totalDeductions)}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="ps-net">
+        <div class="lbl">Net Pay</div>
+        <div class="val">${rm(p.net)}</div>
+      </div>
+
+      <div class="ps-employer-note">
+        <div>Employer contributions (for records — not deducted from employee):</div>
+        <table>
+          <tr><td>EPF (Employer)</td><td>${rm(p.epf.employer)}</td></tr>
+          <tr><td>SOCSO (Employer)</td><td>${rm(p.socso.employer)}</td></tr>
+          <tr><td>EIS (Employer)</td><td>${rm(p.eis.employer)}</td></tr>
+        </table>
+      </div>
+
+      <div class="ps-footer">
+        This is a computer-generated payslip and does not require a signature. Generated on ${new Date().toLocaleDateString('en-MY')}.<br>
+        ${escapeHtml(company.name)}${company.address ? ' · ' + escapeHtml(company.address) : ''}
+      </div>
+    `;
+  }
+
+  // ---------- PDF / print ----------
+  $('printBtn').onclick = ()=> window.print();
+
+  async function buildPdf(){
+    const node = $('payslipDoc');
+    const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p','mm','a4');
+    const pageWidth = 210, pageHeight = 297;
+    const imgWidth = pageWidth;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    let heightLeft = imgHeight, position = 0;
+    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    heightLeft -= pageHeight;
+    while(heightLeft > 0){
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+      heightLeft -= pageHeight;
+    }
+    return pdf;
+  }
+
+  $('downloadPdfBtn').onclick = async ()=>{
+    const btn = $('downloadPdfBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Preparing PDF…';
+    btn.disabled = true;
+    try{
+      const pdf = await buildPdf();
+      const emp = employees.find(e=>e.id===selectedEmpId);
+      const fname = `Payslip_${(emp?emp.name:'staff').replace(/\s+/g,'_')}_${currentPayslip.payMonth}.pdf`;
+      pdf.save(fname);
+    }catch(err){
+      console.error(err);
+      alert('PDF generation failed — you can still use the Print button and choose "Save as PDF".');
+    }finally{
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  };
+
+  // ---------- archive to server (synced to Drive via rclone, see README) ----------
+  $('saveHistoryBtn').onclick = async ()=>{
+    const btn = $('saveHistoryBtn');
+    const original = btn.textContent;
+    if(!currentPayslip || !selectedEmpId) return;
+    btn.textContent = 'Saving…';
+    btn.disabled = true;
+    try{
+      const pdf = await buildPdf();
+      const pdfBase64 = pdf.output('datauristring');
+      const emp = employees.find(e=>e.id===selectedEmpId);
+      await apiPost('/api/payslips', {
+        employeeId: selectedEmpId,
+        employeeName: emp ? emp.name : 'staff',
+        payMonth: currentPayslip.payMonth,
+        pdfBase64
+      });
+      btn.textContent = 'Saved to Archive ✓';
+    }catch(err){
+      console.error(err);
+      btn.textContent = 'Save failed';
+    }finally{
+      btn.disabled = false;
+      setTimeout(()=>{ btn.textContent = original; }, 2000);
+    }
+  };
+
+  init();
+})();
+</script>
+</body>
+</html>

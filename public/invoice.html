@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDS Marine — Invoice Generator</title>
+<style>
+  :root{
+    --navy:#0E2240; --navy-light:#16305c; --gold:#C8973F; --gold-light:#e0b968;
+    --cream:#F7F3EA; --ink:#1c1c1c; --muted:#6b7280; --line:#e3ddcd; --danger:#b3261e;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Helvetica Neue', Arial, sans-serif;background:var(--cream);color:var(--ink);}
+  .topbar{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;}
+  .topbar .logo-mini{width:40px;height:40px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold);flex-shrink:0;overflow:hidden;}
+  .topbar .logo-mini img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+  .topbar h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.3px;}
+  .topbar p{margin:0;font-size:12px;color:var(--gold-light);}
+  .topbar p a{color:var(--gold-light);}
+
+  .layout{display:grid;grid-template-columns:260px 1fr;gap:0;min-height:calc(100vh - 76px);}
+  @media (max-width:820px){.layout{grid-template-columns:1fr;}}
+
+  .sidebar{background:#fff;border-right:1px solid var(--line);padding:20px 16px;}
+  .sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px 4px;}
+  .staff-card{padding:10px 12px;border-radius:8px;margin-bottom:6px;cursor:pointer;border:1px solid transparent;transition:.15s;}
+  .staff-card:hover{background:var(--cream);}
+  .staff-card.active{background:var(--navy);color:#fff;}
+  .staff-card .nm{font-weight:600;font-size:14px;}
+  .staff-card .rl{font-size:12px;color:var(--muted);}
+  .staff-card.active .rl{color:var(--gold-light);}
+  .add-staff-btn{width:100%;margin-top:8px;padding:10px;border-radius:8px;border:1.5px dashed var(--gold);background:transparent;color:var(--navy);font-weight:600;cursor:pointer;font-size:13px;}
+  .add-staff-btn:hover{background:#fff8ea;}
+
+  .main{padding:24px 28px;max-width:900px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:18px;}
+  .card h2{font-size:16px;margin:0 0 4px 0;color:var(--navy);}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 16px 0;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media (max-width:600px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  label{display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px;}
+  input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%;padding:9px 10px;border:1px solid #d7d2c2;border-radius:7px;font-size:14px;font-family:inherit;background:#fff;
+  }
+  input:focus, select:focus, textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,151,63,.15);}
+  .field{margin-bottom:14px;}
+  .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+  .line-item{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px;position:relative;background:#fbfaf6;}
+  .line-item .rm-item-btn{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;line-height:1;}
+  .line-item .row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-top:8px;}
+  @media (max-width:600px){.line-item .row{grid-template-columns:1fr 1fr;}}
+  .line-item .amt-preview{font-size:12px;color:var(--muted);margin-top:6px;text-align:right;}
+  .add-line-btn{background:none;border:1px dashed var(--muted);color:var(--muted);padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;}
+  .add-line-btn:hover{border-color:var(--gold);color:var(--navy);}
+
+  .summary-box{background:var(--navy);color:#fff;border-radius:12px;padding:20px 22px;position:sticky;top:16px;}
+  .summary-box .row{display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.08);}
+  .summary-box .row.total{border-bottom:none;border-top:1px solid var(--gold);margin-top:8px;padding-top:12px;font-size:17px;font-weight:700;color:var(--gold-light);}
+
+  .btn{padding:11px 20px;border-radius:8px;border:none;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{background:var(--navy-light);}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-gold:hover{background:#b6842f;}
+  .btn-outline{background:#fff;border:1.5px solid var(--navy);color:var(--navy);}
+  .btn-outline:hover{background:var(--cream);}
+  .btn-text{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+
+  .hidden{display:none !important;}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+  .empty-state .big-icon{font-size:40px;margin-bottom:10px;}
+
+  /* ===== Invoice document ===== */
+  .invoice-wrap{display:flex;justify-content:center;padding:10px 0 30px 0;}
+  #invoiceDoc{
+    width:210mm;min-height:270mm;background:#fff;padding:16mm 16mm 14mm 16mm;
+    box-shadow:0 4px 24px rgba(0,0,0,.12);font-family:'Helvetica Neue', Arial, sans-serif;color:var(--ink);
+  }
+  .inv-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;}
+  .inv-logo img{width:190px;height:auto;display:block;}
+  .inv-title-block{text-align:right;}
+  .inv-title-block .t0{font-size:20px;color:#444;margin-bottom:6px;}
+  .inv-title-block .t1{font-size:14px;font-weight:700;color:var(--navy);}
+  .inv-title-block .t2{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:2px;}
+  .inv-title-block .t3{font-size:11.5px;color:var(--muted);margin-top:8px;}
+  .inv-title-block .t4{font-size:11.5px;color:var(--muted);margin-top:2px;}
+
+  .inv-bill-band{
+    background:var(--cream);border-radius:8px;padding:16px 18px;margin-bottom:20px;
+    display:flex;justify-content:space-between;gap:20px;
+  }
+  .inv-bill-left .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);font-weight:700;margin-bottom:6px;}
+  .inv-bill-left .cname{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:3px;}
+  .inv-bill-left .addr{font-size:11.5px;color:var(--ink);line-height:1.5;max-width:320px;}
+  .inv-bill-left .email{font-size:11.5px;color:var(--muted);}
+  .inv-bill-right{text-align:right;white-space:nowrap;}
+  .inv-bill-right table{border-collapse:collapse;}
+  .inv-bill-right td{padding:2px 0;font-size:12px;}
+  .inv-bill-right td.k{color:var(--muted);padding-right:14px;text-align:left;}
+  .inv-bill-right td.v{font-weight:700;color:var(--navy);text-align:right;}
+
+  table.inv-items{width:100%;border-collapse:collapse;margin-bottom:14px;}
+  table.inv-items thead th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#fff;
+    background:var(--navy);padding:9px 10px;
+  }
+  table.inv-items thead th.num{text-align:right;}
+  table.inv-items tbody td{padding:10px;font-size:12.5px;border-bottom:1px solid var(--line);vertical-align:top;}
+  table.inv-items tbody td.num{text-align:right;white-space:nowrap;}
+  table.inv-items tbody td .desc-line{white-space:pre-line;}
+
+  .inv-totals{display:flex;justify-content:flex-end;margin-bottom:18px;}
+  .inv-totals table{border-collapse:collapse;min-width:220px;}
+  .inv-totals td{padding:5px 4px;font-size:12.5px;}
+  .inv-totals td.k{color:var(--muted);}
+  .inv-totals td.v{text-align:right;font-weight:600;}
+  .inv-totals tr.grand td{border-top:1px solid var(--line);font-weight:700;color:var(--navy);padding-top:8px;}
+
+  .inv-due-band{background:var(--cream);border:1.5px solid var(--gold);border-radius:8px;padding:16px 18px;margin-bottom:26px;}
+  .inv-due-band .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--navy);font-weight:700;}
+  .inv-due-band .val{font-size:26px;font-weight:800;color:var(--navy);margin-top:4px;font-variant-numeric:tabular-nums;}
+
+  .inv-notes{font-size:11.5px;color:var(--ink);margin-bottom:18px;line-height:1.6;}
+
+  .inv-payment{font-size:10.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px;line-height:1.7;}
+  .inv-payment strong{color:var(--ink);}
+
+  @media print{
+    body *{visibility:hidden;}
+    #invoiceDoc, #invoiceDoc *{visibility:visible;}
+    #invoiceDoc{position:absolute;left:0;top:0;box-shadow:none;width:100%;padding:10mm;}
+    .invoice-wrap{padding:0;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-mini"><img src="/assets/dds-logo-mark.png" alt="DDS"></div>
+  <div>
+    <h1>DDS Marine — Invoice Generator</h1>
+    <p>Branded client invoices, one click to PDF · <a href="/">← Dashboard</a></p>
+  </div>
+</div>
+
+<div class="layout">
+
+  <div class="sidebar">
+    <h3>Clients</h3>
+    <div id="clientListEl"></div>
+    <button class="add-staff-btn" id="addClientBtn">+ Add Client</button>
+
+    <h3 style="margin-top:28px;">Invoice Settings</h3>
+    <button class="add-staff-btn" id="editSettingsBtn" style="border-style:solid;">Header &amp; Bank Details</button>
+  </div>
+
+  <div class="main">
+
+    <div id="emptyState" class="empty-state">
+      <div class="big-icon">📄</div>
+      <p>Add your first client on the left to create an invoice.</p>
+    </div>
+
+    <!-- Invoice header / payment settings -->
+    <div class="card hidden" id="settingsFormCard">
+      <h2>Invoice Header &amp; Payment Details</h2>
+      <p class="sub">Pre-filled from your existing invoice template. Appears on every invoice — edit once, saved automatically.</p>
+
+      <div class="field"><label>Company Name (header)</label><input type="text" id="sCompanyName"></div>
+      <div class="grid3">
+        <div class="field"><label>Header Address Line 1</label><input type="text" id="sAddr1"></div>
+        <div class="field"><label>Header Address Line 2</label><input type="text" id="sAddr2"></div>
+        <div class="field"><label>Header Address Line 3</label><input type="text" id="sAddr3"></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Country</label><input type="text" id="sCountry"></div>
+        <div class="field"><label>Trading Email</label><input type="text" id="sTradingEmail"></div>
+        <div class="field"><label>Registration Line</label><input type="text" id="sRegLine"></div>
+      </div>
+
+      <h2 style="margin-top:22px;">Payment Instruction Block</h2>
+      <div class="grid2">
+        <div class="field"><label>Company Name (payment block)</label><input type="text" id="sPayCompanyName"></div>
+        <div class="field"><label>Registration No.</label><input type="text" id="sPayRegNo"></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Address Line 1</label><input type="text" id="sPayAddr1"></div>
+        <div class="field"><label>Address Line 2</label><input type="text" id="sPayAddr2"></div>
+        <div class="field"><label>Address Line 3</label><input type="text" id="sPayAddr3"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Contact No.</label><input type="text" id="sPayContact"></div>
+        <div class="field"><label>Mail</label><input type="text" id="sPayMail"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Bank Name</label><input type="text" id="sBankName"></div>
+        <div class="field"><label>Bank SWIFT</label><input type="text" id="sBankSwift"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>MYR Account No.</label><input type="text" id="sBankMyrAcct"></div>
+        <div class="field"><label>USD Account No.</label><input type="text" id="sBankUsdAcct"></div>
+      </div>
+      <div class="field"><label>Bank Branch Address</label><input type="text" id="sBankBranchAddress"></div>
+      <div class="grid3">
+        <div class="field"><label>Bank Officer No.</label><input type="text" id="sBankOfficerNo"></div>
+        <div class="field"><label>Bank Officer Name</label><input type="text" id="sBankOfficerName"></div>
+        <div class="field"><label>Bank Officer Mail</label><input type="text" id="sBankOfficerMail"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
+        <button class="btn btn-text" id="closeSettingsBtn">Close</button>
+      </div>
+    </div>
+
+    <!-- Client profile form -->
+    <div class="card hidden" id="clientFormCard">
+      <h2 id="clientFormTitle">Add Client</h2>
+      <p class="sub">Saved so you only enter this once per client.</p>
+      <div class="field"><label>Client / Company Name</label><input type="text" id="cliName"></div>
+      <div class="field"><label>Address</label><textarea id="cliAddress" rows="2"></textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Email 1</label><input type="text" id="cliEmail1"></div>
+        <div class="field"><label>Email 2 (optional)</label><input type="text" id="cliEmail2"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveClientBtn">Save Client</button>
+        <button class="btn btn-text" id="cancelClientBtn">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Invoice creation -->
+    <div class="hidden" id="invoiceArea">
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h2 id="invoiceHeading" style="margin-bottom:0;">New Invoice</h2>
+          <p class="sub" style="margin-bottom:0;" id="invoiceSub"></p>
+        </div>
+        <button class="btn btn-text" id="editThisClientBtn">Edit client</button>
+      </div>
+
+      <div class="card">
+        <h2>Invoice Details</h2>
+        <div class="grid3">
+          <div class="field"><label>Invoice #</label><input type="text" id="invNumber"></div>
+          <div class="field"><label>Date</label><input type="date" id="invDate"></div>
+          <div class="field"><label>Due Date</label><input type="date" id="invDueDate"></div>
+        </div>
+
+        <label style="margin-top:10px;">Line Items</label>
+        <div id="lineItems"></div>
+        <button class="add-line-btn" id="addLineBtn">+ Add line item</button>
+
+        <div class="field" style="margin-top:18px;">
+          <label>Notes <span style="font-weight:400;color:var(--muted);">(optional — shown on the invoice below the totals)</span></label>
+          <textarea id="invNotes" rows="2" placeholder="e.g. payment terms, special instructions"></textarea>
+        </div>
+      </div>
+
+      <div class="grid2" style="align-items:start;">
+        <div class="card">
+          <h2>Notes</h2>
+          <p class="sub">No SST applied — Total equals Subtotal. Amount Due always equals the Total (payment status isn't tracked here).</p>
+        </div>
+        <div class="summary-box">
+          <div class="row"><span>Subtotal</span><span id="sumSubtotal">RM 0.00</span></div>
+          <div class="row total"><span>Amount Due</span><span id="sumTotal">RM 0.00</span></div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin:4px 0 30px 0;">
+        <button class="btn btn-gold" id="generateBtn">Generate Invoice →</button>
+      </div>
+    </div>
+
+    <!-- Invoice preview -->
+    <div class="hidden" id="previewArea">
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-outline" id="backToEditBtn">← Back to Edit</button>
+        <button class="btn btn-gold" id="downloadPdfBtn">Download PDF</button>
+        <button class="btn btn-outline" id="printBtn">Print</button>
+        <button class="btn btn-primary" id="saveArchiveBtn">Save to Archive (→ Drive)</button>
+      </div>
+      <div class="invoice-wrap"><div id="invoiceDoc"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  async function apiGet(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('GET '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+  async function apiPost(url, body){
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!r.ok) throw new Error('POST '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+
+  let clients = [];
+  let selectedClientId = null;
+  let settings = {};
+  let lineItems = [];
+  let currentInvoice = null;
+
+  const $ = id => document.getElementById(id);
+  const rm = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const round2 = n => Math.round((Number(n)||0) * 100) / 100;
+  const escapeHtml = s => String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  async function init(){
+    try{ clients = await apiGet('/api/clients'); }catch(e){ console.error(e); clients = []; }
+    try{ const s = await apiGet('/api/invoice-settings'); if(s && Object.keys(s).length) settings = s; }catch(e){ console.error(e); }
+    renderClientList();
+    if(clients.length){ selectClient(clients[0].id); }
+    else { $('emptyState').classList.remove('hidden'); }
+  }
+
+  function renderClientList(){
+    const el = $('clientListEl');
+    el.innerHTML = '';
+    clients.forEach(c=>{
+      const div = document.createElement('div');
+      div.className = 'staff-card' + (c.id===selectedClientId ? ' active' : '');
+      div.innerHTML = `<div class="nm">${escapeHtml(c.name||'Unnamed')}</div><div class="rl">${escapeHtml((c.address||'').split('\n')[0]||'')}</div>`;
+      div.onclick = ()=> selectClient(c.id);
+      el.appendChild(div);
+    });
+  }
+
+  function hideAllPanels(){
+    $('emptyState').classList.add('hidden');
+    $('settingsFormCard').classList.add('hidden');
+    $('clientFormCard').classList.add('hidden');
+    $('invoiceArea').classList.add('hidden');
+    $('previewArea').classList.add('hidden');
+  }
+
+  // ---------- invoice settings ----------
+  function fillSettingsForm(){
+    $('sCompanyName').value = settings.companyName || '';
+    $('sAddr1').value = settings.headerAddressLine1 || '';
+    $('sAddr2').value = settings.headerAddressLine2 || '';
+    $('sAddr3').value = settings.headerAddressLine3 || '';
+    $('sCountry').value = settings.headerCountry || '';
+    $('sTradingEmail').value = settings.tradingEmail || '';
+    $('sRegLine').value = settings.regLine || '';
+    $('sPayCompanyName').value = settings.payCompanyName || '';
+    $('sPayRegNo').value = settings.payRegNo || '';
+    $('sPayAddr1').value = settings.payAddressLine1 || '';
+    $('sPayAddr2').value = settings.payAddressLine2 || '';
+    $('sPayAddr3').value = settings.payAddressLine3 || '';
+    $('sPayContact').value = settings.payContact || '';
+    $('sPayMail').value = settings.payMail || '';
+    $('sBankName').value = settings.bankName || '';
+    $('sBankSwift').value = settings.bankSwift || '';
+    $('sBankMyrAcct').value = settings.bankMyrAcct || '';
+    $('sBankUsdAcct').value = settings.bankUsdAcct || '';
+    $('sBankBranchAddress').value = settings.bankBranchAddress || '';
+    $('sBankOfficerNo').value = settings.bankOfficerNo || '';
+    $('sBankOfficerName').value = settings.bankOfficerName || '';
+    $('sBankOfficerMail').value = settings.bankOfficerMail || '';
+  }
+
+  $('editSettingsBtn').onclick = ()=>{
+    hideAllPanels();
+    fillSettingsForm();
+    $('settingsFormCard').classList.remove('hidden');
+  };
+  $('closeSettingsBtn').onclick = ()=>{
+    if(selectedClientId) selectClient(selectedClientId);
+    else { hideAllPanels(); $('emptyState').classList.remove('hidden'); }
+  };
+  $('saveSettingsBtn').onclick = async ()=>{
+    settings = {
+      companyName: $('sCompanyName').value.trim(),
+      headerAddressLine1: $('sAddr1').value.trim(),
+      headerAddressLine2: $('sAddr2').value.trim(),
+      headerAddressLine3: $('sAddr3').value.trim(),
+      headerCountry: $('sCountry').value.trim(),
+      tradingEmail: $('sTradingEmail').value.trim(),
+      regLine: $('sRegLine').value.trim(),
+      payCompanyName: $('sPayCompanyName').value.trim(),
+      payRegNo: $('sPayRegNo').value.trim(),
+      payAddressLine1: $('sPayAddr1').value.trim(),
+      payAddressLine2: $('sPayAddr2').value.trim(),
+      payAddressLine3: $('sPayAddr3').value.trim(),
+      payContact: $('sPayContact').value.trim(),
+      payMail: $('sPayMail').value.trim(),
+      bankName: $('sBankName').value.trim(),
+      bankSwift: $('sBankSwift').value.trim(),
+      bankMyrAcct: $('sBankMyrAcct').value.trim(),
+      bankUsdAcct: $('sBankUsdAcct').value.trim(),
+      bankBranchAddress: $('sBankBranchAddress').value.trim(),
+      bankOfficerNo: $('sBankOfficerNo').value.trim(),
+      bankOfficerName: $('sBankOfficerName').value.trim(),
+      bankOfficerMail: $('sBankOfficerMail').value.trim()
+    };
+    try{ await apiPost('/api/invoice-settings', settings); }
+    catch(e){ alert('Could not save settings — check the server is running.'); return; }
+    $('closeSettingsBtn').click();
+  };
+
+  // ---------- clients ----------
+  $('addClientBtn').onclick = ()=> openClientForm(null);
+  $('cancelClientBtn').onclick = ()=>{
+    if(selectedClientId) selectClient(selectedClientId);
+    else { hideAllPanels(); $('emptyState').classList.remove('hidden'); }
+  };
+  $('editThisClientBtn').onclick = ()=>{
+    const c = clients.find(x=>x.id===selectedClientId);
+    if(c) openClientForm(c);
+  };
+
+  function openClientForm(client){
+    hideAllPanels();
+    $('clientFormTitle').textContent = client ? 'Edit Client' : 'Add Client';
+    $('cliName').value = client ? client.name : '';
+    $('cliAddress').value = client ? client.address : '';
+    $('cliEmail1').value = client ? client.email1 : '';
+    $('cliEmail2').value = client ? client.email2 : '';
+    $('clientFormCard').dataset.editingId = client ? client.id : '';
+    $('clientFormCard').classList.remove('hidden');
+  }
+
+  $('saveClientBtn').onclick = async ()=>{
+    const editingId = $('clientFormCard').dataset.editingId;
+    const profile = {
+      id: editingId || undefined,
+      name: $('cliName').value.trim(),
+      address: $('cliAddress').value.trim(),
+      email1: $('cliEmail1').value.trim(),
+      email2: $('cliEmail2').value.trim()
+    };
+    if(!profile.name){ alert('Please enter a client name.'); return; }
+    let saved;
+    try{ saved = await apiPost('/api/clients', profile); }
+    catch(e){ alert('Could not save client — check the server is running.'); return; }
+    const i = clients.findIndex(c=>c.id===saved.id);
+    if(i>-1) clients[i] = saved; else clients.push(saved);
+    selectClient(saved.id);
+  };
+
+  // ---------- invoice creation ----------
+  async function selectClient(id){
+    selectedClientId = id;
+    hideAllPanels();
+    renderClientList();
+    const client = clients.find(c=>c.id===id);
+    if(!client) return;
+    $('emptyState').classList.add('hidden');
+    await openInvoiceForm(client);
+  }
+
+  async function openInvoiceForm(client){
+    $('invoiceHeading').textContent = 'New Invoice — ' + client.name;
+    $('invoiceSub').textContent = (client.address||'').split('\n')[0] || '';
+
+    let nextNum = 1;
+    try{ const r = await apiGet('/api/invoices/next-number'); nextNum = r.next; }catch(e){}
+    $('invNumber').value = nextNum;
+
+    const today = new Date().toISOString().slice(0,10);
+    $('invDate').value = today;
+    $('invDueDate').value = today;
+    $('invNotes').value = '';
+
+    lineItems = [{ description:'', qty:1, price:0, discount:0 }];
+    renderLineItems();
+
+    $('invoiceArea').classList.remove('hidden');
+    updateSummary();
+  }
+
+  function renderLineItems(){
+    const wrap = $('lineItems');
+    wrap.innerHTML = '';
+    lineItems.forEach((li, i)=>{
+      const div = document.createElement('div');
+      div.className = 'line-item';
+      div.innerHTML = `
+        <button class="rm-item-btn" data-idx="${i}" title="Remove line">×</button>
+        <label style="margin-bottom:4px;">Description</label>
+        <textarea rows="2" class="li-desc" data-idx="${i}" placeholder="e.g. Vessel name : MT EASTERN QUINCE&#10;Call Sign : Papa Delta&#10;POAC">${escapeHtml(li.description)}</textarea>
+        <div class="row">
+          <div><label>Qty</label><input type="number" class="li-qty" data-idx="${i}" value="${li.qty}" min="0" step="1"></div>
+          <div><label>Price (RM)</label><input type="number" class="li-price" data-idx="${i}" value="${li.price}" min="0" step="0.01"></div>
+          <div><label>Discount (RM)</label><input type="number" class="li-discount" data-idx="${i}" value="${li.discount}" min="0" step="0.01"></div>
+          <div><label>Amount</label><div class="amt-preview" style="text-align:left;padding-top:9px;font-weight:600;color:var(--navy);" id="liAmt${i}">${rm(round2(li.qty*li.price - li.discount))}</div></div>
+        </div>
+      `;
+      wrap.appendChild(div);
+    });
+    wrap.querySelectorAll('.li-desc').forEach(el=> el.oninput = e=>{ lineItems[e.target.dataset.idx].description = e.target.value; });
+    wrap.querySelectorAll('.li-qty').forEach(el=> el.oninput = e=>{ lineItems[e.target.dataset.idx].qty = Number(e.target.value)||0; refreshLineAmount(e.target.dataset.idx); });
+    wrap.querySelectorAll('.li-price').forEach(el=> el.oninput = e=>{ lineItems[e.target.dataset.idx].price = Number(e.target.value)||0; refreshLineAmount(e.target.dataset.idx); });
+    wrap.querySelectorAll('.li-discount').forEach(el=> el.oninput = e=>{ lineItems[e.target.dataset.idx].discount = Number(e.target.value)||0; refreshLineAmount(e.target.dataset.idx); });
+    wrap.querySelectorAll('.rm-item-btn').forEach(el=> el.onclick = e=>{ lineItems.splice(e.target.dataset.idx,1); renderLineItems(); updateSummary(); });
+  }
+  function refreshLineAmount(idx){
+    const li = lineItems[idx];
+    const amt = round2(li.qty*li.price - li.discount);
+    const node = $('liAmt'+idx);
+    if(node) node.textContent = rm(amt);
+    updateSummary();
+  }
+  $('addLineBtn').onclick = ()=>{ lineItems.push({description:'', qty:1, price:0, discount:0}); renderLineItems(); updateSummary(); };
+
+  function computeInvoice(){
+    const items = lineItems.map(li=>({
+      description: li.description,
+      qty: li.qty,
+      price: li.price,
+      discount: li.discount,
+      amount: round2(li.qty*li.price - li.discount)
+    }));
+    const subtotal = round2(items.reduce((s,i)=>s+i.amount, 0));
+    const total = subtotal; // no SST
+    return {
+      invoiceNumber: $('invNumber').value.trim(),
+      date: $('invDate').value,
+      dueDate: $('invDueDate').value,
+      notes: $('invNotes').value.trim(),
+      items, subtotal, total
+    };
+  }
+
+  function updateSummary(){
+    const inv = computeInvoice();
+    $('sumSubtotal').textContent = rm(inv.subtotal);
+    $('sumTotal').textContent = rm(inv.total);
+  }
+  document.addEventListener('input', (e)=>{ if(e.target.closest('#invoiceArea')) updateSummary(); });
+
+  // ---------- generate / render document ----------
+  $('generateBtn').onclick = ()=>{
+    const client = clients.find(c=>c.id===selectedClientId);
+    if(!client) return;
+    if(!$('invNumber').value.trim()){ alert('Please enter an invoice number.'); return; }
+    currentInvoice = computeInvoice();
+    renderInvoiceDoc(client, currentInvoice);
+    hideAllPanels();
+    $('previewArea').classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+  $('backToEditBtn').onclick = ()=>{ hideAllPanels(); $('invoiceArea').classList.remove('hidden'); };
+
+  function dateLabel(ymd){
+    if(!ymd) return '—';
+    const [y,m,d] = ymd.split('-');
+    const dt = new Date(Number(y), Number(m)-1, Number(d));
+    return dt.toLocaleDateString('en-MY', {day:'2-digit', month:'long', year:'numeric'});
+  }
+
+  function renderInvoiceDoc(client, inv){
+    const itemRows = inv.items.map(it=>`
+      <tr>
+        <td><div class="desc-line">${escapeHtml(it.description)}</div></td>
+        <td class="num">${it.qty}</td>
+        <td class="num">${rm(it.price)}</td>
+        <td class="num">${it.discount ? rm(it.discount) : ''}</td>
+        <td class="num">${rm(it.amount)}</td>
+      </tr>
+    `).join('');
+
+    const emails = [client.email1, client.email2].filter(Boolean)
+      .map(e=>`<div class="email">${escapeHtml(e)}</div>`).join('');
+
+    $('invoiceDoc').innerHTML = `
+      <div class="inv-header">
+        <div class="inv-logo"><img src="/assets/dds-logo.png" alt="DDS"></div>
+        <div class="inv-title-block">
+          <div class="t0">Invoice</div>
+          <div class="t1">${escapeHtml(settings.companyName||'')}</div>
+          <div class="t2">
+            ${escapeHtml(settings.headerAddressLine1||'')}<br>
+            ${escapeHtml(settings.headerAddressLine2||'')}<br>
+            ${escapeHtml(settings.headerAddressLine3||'')}<br>
+            ${escapeHtml(settings.headerCountry||'')}
+          </div>
+          <div class="t3">${escapeHtml(settings.tradingEmail||'')}</div>
+          <div class="t4">${escapeHtml(settings.regLine||'')}</div>
+        </div>
+      </div>
+
+      <div class="inv-bill-band">
+        <div class="inv-bill-left">
+          <div class="lbl">Bill To</div>
+          <div class="cname">${escapeHtml(client.name)}</div>
+          <div class="addr">${escapeHtml(client.address||'').replace(/\n/g,'<br>')}</div>
+          ${emails}
+        </div>
+        <div class="inv-bill-right">
+          <table>
+            <tr><td class="k">Invoice #</td><td class="v">${escapeHtml(inv.invoiceNumber)}</td></tr>
+            <tr><td class="k">Date</td><td class="v">${dateLabel(inv.date)}</td></tr>
+            <tr><td class="k">Due date</td><td class="v">${dateLabel(inv.dueDate)}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <table class="inv-items">
+        <thead>
+          <tr><th>Item</th><th class="num">Quantity</th><th class="num">Price</th><th class="num">Discount</th><th class="num">Amount</th></tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+
+      <div class="inv-totals">
+        <table>
+          <tr><td class="k">Subtotal</td><td class="v">${rm(inv.subtotal)}</td></tr>
+          <tr class="grand"><td class="k">Total</td><td class="v">${rm(inv.total)}</td></tr>
+        </table>
+      </div>
+
+      <div class="inv-due-band">
+        <div class="lbl">Amount Due</div>
+        <div class="val">${rm(inv.total)}</div>
+      </div>
+
+      ${inv.notes ? `<div class="inv-notes"><strong>Notes:</strong> ${escapeHtml(inv.notes)}</div>` : ''}
+
+      <div class="inv-payment">
+        <strong>Payment instruction</strong><br>
+        ${escapeHtml(settings.payCompanyName||'')}<br>
+        Reg No: ${escapeHtml(settings.payRegNo||'')}<br>
+        ${escapeHtml(settings.payAddressLine1||'')}<br>
+        ${escapeHtml(settings.payAddressLine2||'')}<br>
+        ${escapeHtml(settings.payAddressLine3||'')}<br>
+        Contact : ${escapeHtml(settings.payContact||'')}<br>
+        Mail : ${escapeHtml(settings.payMail||'')}<br>
+        ${escapeHtml(settings.bankName||'')}<br>
+        Bank SWIFT : ${escapeHtml(settings.bankSwift||'')}<br>
+        MYR acct no: ${escapeHtml(settings.bankMyrAcct||'')}<br>
+        USD acct no: ${escapeHtml(settings.bankUsdAcct||'')}<br>
+        Bank branch address:<br>
+        ${escapeHtml(settings.bankBranchAddress||'')}<br>
+        Bank officer no : ${escapeHtml(settings.bankOfficerNo||'')}<br>
+        Bank officer name: ${escapeHtml(settings.bankOfficerName||'')}<br>
+        Bank officer mail: ${escapeHtml(settings.bankOfficerMail||'')}
+      </div>
+    `;
+  }
+
+  // ---------- PDF / print / archive ----------
+  $('printBtn').onclick = ()=> window.print();
+
+  async function buildPdf(){
+    const node = $('invoiceDoc');
+    const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p','mm','a4');
+    const pageWidth = 210, pageHeight = 297;
+    const imgWidth = pageWidth;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    let heightLeft = imgHeight, position = 0;
+    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    heightLeft -= pageHeight;
+    while(heightLeft > 0){
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+      heightLeft -= pageHeight;
+    }
+    return pdf;
+  }
+
+  $('downloadPdfBtn').onclick = async ()=>{
+    const btn = $('downloadPdfBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Preparing PDF…';
+    btn.disabled = true;
+    try{
+      const pdf = await buildPdf();
+      pdf.save(`Invoice_${currentInvoice.invoiceNumber}.pdf`);
+    }catch(err){
+      console.error(err);
+      alert('PDF generation failed — you can still use the Print button and choose "Save as PDF".');
+    }finally{
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  };
+
+  $('saveArchiveBtn').onclick = async ()=>{
+    const btn = $('saveArchiveBtn');
+    const original = btn.textContent;
+    if(!currentInvoice || !selectedClientId) return;
+    btn.textContent = 'Saving…';
+    btn.disabled = true;
+    try{
+      const pdf = await buildPdf();
+      const pdfBase64 = pdf.output('datauristring');
+      const client = clients.find(c=>c.id===selectedClientId);
+      await apiPost('/api/invoices', {
+        invoiceNumber: currentInvoice.invoiceNumber,
+        clientId: selectedClientId,
+        clientName: client ? client.name : '',
+        total: currentInvoice.total,
+        pdfBase64
+      });
+      btn.textContent = 'Saved to Archive ✓';
+    }catch(err){
+      console.error(err);
+      btn.textContent = 'Save failed';
+    }finally{
+      btn.disabled = false;
+      setTimeout(()=>{ btn.textContent = original; }, 2000);
+    }
+  };
+
+  init();
+})();
+</script>
+</body>
+</html>
