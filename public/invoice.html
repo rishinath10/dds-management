@@ -121,9 +121,15 @@
   .inv-totals td.v{text-align:right;font-weight:600;}
   .inv-totals tr.grand td{border-top:1px solid var(--line);font-weight:700;color:var(--navy);padding-top:8px;}
 
-  .inv-due-band{background:var(--cream);border:1.5px solid var(--gold);border-radius:8px;padding:16px 18px;margin-bottom:26px;}
+  /* Label left, figure right — lines the amount up with the Subtotal/Total
+     column above it, and matches the payslip's Net Pay band. */
+  .inv-due-band{
+    background:var(--cream);border:1.5px solid var(--gold);border-radius:8px;
+    padding:16px 18px;margin-bottom:26px;
+    display:flex;justify-content:space-between;align-items:center;gap:16px;
+  }
   .inv-due-band .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--navy);font-weight:700;}
-  .inv-due-band .val{font-size:26px;font-weight:800;color:var(--navy);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .inv-due-band .val{font-size:26px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap;}
 
   .inv-notes{font-size:11.5px;color:var(--ink);margin-bottom:18px;line-height:1.6;}
 

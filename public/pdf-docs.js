@@ -543,12 +543,14 @@
     y += 8;
 
     // ---- amount due ----------------------------------------------------
-    var dueH = 18;
+    // Label left, figure right — lines the amount up with the Subtotal/Total
+    // column above it, and matches the payslip's Net Pay band.
+    var dueH = 16;
     band(pdf, MARGIN, y, CONTENT_W, dueH, CREAM, GOLD, 2);
-    setFont(pdf, 'bold', 7.5, NAVY);
-    pdf.text('AMOUNT DUE', MARGIN + 5, y + 6.5);
+    setFont(pdf, 'bold', 9, NAVY);
+    pdf.text('AMOUNT DUE', MARGIN + 5, y + dueH / 2 + 1.2);
     setFont(pdf, 'bold', 18, NAVY);
-    pdf.text(money(inv.total), MARGIN + 5, y + 14.5);
+    pdf.text(money(inv.total), PAGE_W - MARGIN - 5, y + dueH / 2 + 2.2, { align: 'right' });
     y += dueH + 7;
 
     // ---- notes ---------------------------------------------------------
