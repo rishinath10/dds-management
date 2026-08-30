@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/assets/dds-logo-mark.png">
 <title>DDS Marine — Dashboard</title>
 <style>
   :root{
@@ -28,7 +29,14 @@
   a.card h2{font-size:19px;margin:0 0 6px 0;color:var(--navy);}
   a.card p{font-size:13.5px;color:var(--muted);margin:0;line-height:1.5;}
   a.card .go{margin-top:14px;font-size:12.5px;font-weight:700;color:var(--gold);letter-spacing:.03em;}
-  .settings-row{margin-top:22px;display:flex;gap:14px;}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;}
+  @media (max-width:640px){.stats{grid-template-columns:1fr 1fr;}}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .stat .v{font-size:24px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;line-height:1.15;}
+  .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-top:5px;}
+  .stat .sub{font-size:11.5px;color:var(--gold);margin-top:3px;font-weight:600;}
+
+  .settings-row{margin-top:22px;display:flex;gap:14px;flex-wrap:wrap;}
   .settings-row a{
     flex:1;text-align:center;padding:12px;border-radius:9px;border:1.5px dashed var(--muted);
     color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;
@@ -46,6 +54,13 @@
   </div>
 
   <div class="wrap">
+    <div class="stats" id="stats">
+      <div class="stat"><div class="v" id="statStaff">—</div><div class="k">Staff</div></div>
+      <div class="stat"><div class="v" id="statClients">—</div><div class="k">Clients</div></div>
+      <div class="stat"><div class="v" id="statPayslips">—</div><div class="k">Payslips archived</div><div class="sub" id="statPayslipsMonth"></div></div>
+      <div class="stat"><div class="v" id="statInvoices">—</div><div class="k">Invoices archived</div><div class="sub" id="statInvoicedMonth"></div></div>
+    </div>
+
     <div class="cards">
       <a class="card" href="/payslip.html">
         <span class="icon">🧾</span>
@@ -62,9 +77,34 @@
     </div>
 
     <div class="settings-row">
+      <a href="/archive.html">📁 Browse Archive</a>
       <a href="/payslip.html#settings">Payslip Letterhead Settings</a>
       <a href="/invoice.html#settings">Invoice Header &amp; Bank Details</a>
     </div>
   </div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const rm = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  fetch('/api/stats')
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('stats ' + r.status)))
+    .then(s => {
+      $('statStaff').textContent = s.employees;
+      $('statClients').textContent = s.clients;
+      $('statPayslips').textContent = s.payslips;
+      $('statInvoices').textContent = s.invoices;
+      if(s.payslipsThisMonth) $('statPayslipsMonth').textContent = s.payslipsThisMonth + ' this month';
+      if(s.invoicedThisMonth) $('statInvoicedMonth').textContent = rm(s.invoicedThisMonth) + ' this month';
+    })
+    .catch(err => {
+      // The dashboard still works without the counters — don't block the links.
+      console.error(err);
+      document.getElementById('stats').style.display = 'none';
+    });
+})();
+</script>
 </body>
 </html>

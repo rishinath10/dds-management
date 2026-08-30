@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/assets/dds-logo-mark.png">
 <title>DDS Marine — Invoice Generator</title>
 <style>
   :root{
@@ -143,7 +144,7 @@
   <div class="logo-mini"><img src="/assets/dds-logo-mark.png" alt="DDS"></div>
   <div>
     <h1>DDS Marine — Invoice Generator</h1>
-    <p>Branded client invoices, one click to PDF · <a href="/">← Dashboard</a></p>
+    <p>Branded client invoices, one click to PDF · <a href="/">← Dashboard</a> · <a href="/archive.html">Archive</a></p>
   </div>
 </div>
 
@@ -230,6 +231,7 @@
       <div class="btn-row">
         <button class="btn btn-primary" id="saveClientBtn">Save Client</button>
         <button class="btn btn-text" id="cancelClientBtn">Cancel</button>
+        <button class="btn btn-text hidden" id="deleteClientBtn" style="color:var(--danger);margin-left:auto;">Delete this client</button>
       </div>
     </div>
 
@@ -291,8 +293,10 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Vendored locally (see public/vendor/README.md) so PDF generation keeps
+     working without internet access and cannot break if a CDN does. -->
+<script src="/vendor/html2canvas.min.js"></script>
+<script src="/vendor/jspdf.umd.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -304,7 +308,18 @@
   }
   async function apiPost(url, body){
     const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-    if(!r.ok) throw new Error('POST '+url+' failed ('+r.status+')');
+    if(!r.ok){
+      // The server explains real failures (too large, bad PDF) in JSON — pass
+      // that through so the UI can show something actionable.
+      let detail = '';
+      try{ detail = (await r.json()).error || ''; }catch(e){}
+      throw new Error(detail || ('POST '+url+' failed ('+r.status+')'));
+    }
+    return r.json();
+  }
+  async function apiDelete(url){
+    const r = await fetch(url, {method:'DELETE'});
+    if(!r.ok) throw new Error('DELETE '+url+' failed ('+r.status+')');
     return r.json();
   }
 
@@ -323,6 +338,31 @@
     try{ clients = await apiGet('/api/clients'); }catch(e){ console.error(e); clients = []; }
     try{ const s = await apiGet('/api/invoice-settings'); if(s && Object.keys(s).length) settings = s; }catch(e){ console.error(e); }
     renderClientList();
+
+    // Arriving from the Archive's "Duplicate" button: reopen that invoice's
+    // client and line items, under a fresh invoice number.
+    const duplicateId = new URLSearchParams(location.search).get('duplicate');
+    if(duplicateId){
+      try{
+        const source = await apiGet('/api/invoices/' + encodeURIComponent(duplicateId));
+        const client = clients.find(c=>c.id===source.clientId);
+        if(client){
+          selectedClientId = client.id;
+          renderClientList();
+          hideAllPanels();
+          $('emptyState').classList.add('hidden');
+          await openInvoiceForm(client, source);
+          history.replaceState(null, '', location.pathname);
+          return;
+        }
+        alert('That invoice’s client is no longer in the client list, so it can’t be duplicated.');
+      }catch(e){
+        console.error(e);
+        alert('Could not load that invoice to duplicate.');
+      }
+      history.replaceState(null, '', location.pathname);
+    }
+
     if(clients.length){ selectClient(clients[0].id); }
     else { $('emptyState').classList.remove('hidden'); }
   }
@@ -431,8 +471,29 @@
     $('cliEmail1').value = client ? client.email1 : '';
     $('cliEmail2').value = client ? client.email2 : '';
     $('clientFormCard').dataset.editingId = client ? client.id : '';
+    $('deleteClientBtn').classList.toggle('hidden', !client);
     $('clientFormCard').classList.remove('hidden');
   }
+
+  $('deleteClientBtn').onclick = async ()=>{
+    const id = $('clientFormCard').dataset.editingId;
+    const client = clients.find(c=>c.id===id);
+    if(!client) return;
+    if(!confirm(`Remove ${client.name} from the client list?\n\nInvoices already archived for them are kept.`)) return;
+    try{
+      await apiDelete('/api/clients/'+encodeURIComponent(id));
+    }catch(e){
+      console.error(e);
+      alert('Could not delete client — check the server is running.');
+      return;
+    }
+    clients = clients.filter(c=>c.id!==id);
+    selectedClientId = null;
+    renderClientList();
+    hideAllPanels();
+    if(clients.length) selectClient(clients[0].id);
+    else $('emptyState').classList.remove('hidden');
+  };
 
   $('saveClientBtn').onclick = async ()=>{
     const editingId = $('clientFormCard').dataset.editingId;
@@ -463,10 +524,11 @@
     await openInvoiceForm(client);
   }
 
-  async function openInvoiceForm(client){
-    $('invoiceHeading').textContent = 'New Invoice — ' + client.name;
+  async function openInvoiceForm(client, prefill){
+    $('invoiceHeading').textContent = (prefill ? 'Duplicate of #' + prefill.invoiceNumber + ' — ' : 'New Invoice — ') + client.name;
     $('invoiceSub').textContent = (client.address||'').split('\n')[0] || '';
 
+    // A duplicate always gets a fresh number — the copied one is already used.
     let nextNum = 1;
     try{ const r = await apiGet('/api/invoices/next-number'); nextNum = r.next; }catch(e){}
     $('invNumber').value = nextNum;
@@ -474,9 +536,16 @@
     const today = new Date().toISOString().slice(0,10);
     $('invDate').value = today;
     $('invDueDate').value = today;
-    $('invNotes').value = '';
+    $('invNotes').value = prefill ? (prefill.notes || '') : '';
 
-    lineItems = [{ description:'', qty:1, price:0, discount:0 }];
+    lineItems = prefill && Array.isArray(prefill.items) && prefill.items.length
+      ? prefill.items.map(it=>({
+          description: it.description || '',
+          qty: Number(it.qty)||0,
+          price: Number(it.price)||0,
+          discount: Number(it.discount)||0
+        }))
+      : [{ description:'', qty:1, price:0, discount:0 }];
     renderLineItems();
 
     $('invoiceArea').classList.remove('hidden');
@@ -659,19 +728,23 @@
   async function buildPdf(){
     const node = $('invoiceDoc');
     const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
-    const imgData = canvas.toDataURL('image/png');
+    // JPEG, not PNG: a full A4 page rendered at scale 2 is a ~13 MB lossless
+    // PNG, which blew past the server's upload limit and made every archive
+    // save fail. At quality 0.95 the same page is a few hundred KB and still
+    // sharp at print size — and the Drive archive stays a sane size.
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p','mm','a4');
     const pageWidth = 210, pageHeight = 297;
     const imgWidth = pageWidth;
     const imgHeight = canvas.height * imgWidth / canvas.width;
     let heightLeft = imgHeight, position = 0;
-    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight);
     heightLeft -= pageHeight;
     while(heightLeft > 0){
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+      pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight);
       heightLeft -= pageHeight;
     }
     return pdf;
@@ -704,20 +777,30 @@
       const pdf = await buildPdf();
       const pdfBase64 = pdf.output('datauristring');
       const client = clients.find(c=>c.id===selectedClientId);
-      await apiPost('/api/invoices', {
+      const res = await apiPost('/api/invoices', {
         invoiceNumber: currentInvoice.invoiceNumber,
         clientId: selectedClientId,
         clientName: client ? client.name : '',
         total: currentInvoice.total,
+        // Stored so the invoice can be reopened and re-issued from the Archive
+        // without retyping it — the PDF on its own isn't machine-readable.
+        subtotal: currentInvoice.subtotal,
+        date: currentInvoice.date,
+        dueDate: currentInvoice.dueDate,
+        notes: currentInvoice.notes,
+        items: currentInvoice.items,
         pdfBase64
       });
-      btn.textContent = 'Saved to Archive ✓';
+      btn.textContent = res && res.replaced ? 'Archive updated ✓' : 'Saved to Archive ✓';
     }catch(err){
       console.error(err);
       btn.textContent = 'Save failed';
+      // A silent failure here means the user believes a document was archived
+      // when it wasn't — always say why.
+      alert('Could not save to the archive.\n\n' + (err && err.message ? err.message : err));
     }finally{
       btn.disabled = false;
-      setTimeout(()=>{ btn.textContent = original; }, 2000);
+      setTimeout(()=>{ btn.textContent = original; }, 2500);
     }
   };
 

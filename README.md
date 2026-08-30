@@ -1,8 +1,8 @@
 # DDS Marine — Dashboard (self-hosted)
 
-A small Node/Express app with two modules — **Payslips** and **Invoices** —
-both with DDS branding, both downloadable as PDF, both archived to Google
-Drive via `rclone`. Staff and client data live in JSON files on your VPS.
+A small Node/Express app with three modules — **Payslips**, **Invoices** and
+**Archive** — all with DDS branding, all downloadable as PDF, all archived to
+Google Drive via `rclone`. Staff and client data live in JSON files on your VPS.
 
 ---
 
@@ -13,11 +13,14 @@ server.js               Express server (API + serves the frontend)
 package.json
 .env.example             Copy to .env and fill in real values
 public/
-  index.html              Dashboard home (links to Payslips / Invoices)
+  index.html              Dashboard home (live counts + links to each module)
   payslip.html             Payslip generator (staff, EPF/SOCSO/EIS calc)
   invoice.html             Invoice generator (clients, line items)
+  archive.html             Browse/search everything archived, reopen PDFs
   assets/dds-logo.png       Full logo + tagline (used on invoices)
   assets/dds-logo-mark.png  Diamond mark only (used in small circular badges)
+  vendor/                   html2canvas + jsPDF, vendored (see vendor/README.md)
+test/api.test.js          API tests — run with `npm test`
 data/                     employees.json, clients.json, company.json,
                            invoice_settings.json, payslips.json, invoices.json
                            (all auto-created on first run)
@@ -32,10 +35,44 @@ an invoice uploads the generated PDF to the server, which writes it to
 `pdfs/payslips/` or `pdfs/invoices/` respectively. "Download PDF" is separate
 — that one only saves to your own device and never touches the server.
 
+**Browsing what you've archived:** the **Archive** page (`/archive.html`, also
+linked from the dashboard) lists every payslip and invoice that was saved,
+newest first, with a search box. "View PDF" opens the server's copy — the same
+file rclone syncs to Drive. Each payslip row shows its gross and net pay, and
+each invoice row can be **duplicated**: that reopens the invoice page with the
+same client, line items and notes pre-filled under a fresh invoice number,
+which saves retyping recurring jobs.
+
+**Re-archiving is a replace, not a duplicate.** Saving the same staff member's
+same pay month, or the same invoice number, twice overwrites the earlier PDF
+and updates that archive entry in place rather than leaving a stale copy
+behind. The button says "Archive updated ✓" instead of "Saved to Archive ✓"
+when that happens.
+
 **Invoice numbering:** the "Invoice #" field is pre-filled with (highest
 number seen so far + 1), but it's just a suggestion — fully editable, so
 skipping numbers (e.g. going from 73 to 80 because other invoices exist
 outside this tool) works fine.
+
+**Removing staff or clients:** open the profile ("Edit staff profile" /
+"Edit client") and use the delete link at the bottom of the form. Anything
+already archived for them is deliberately kept — deleting someone from the
+list never removes historical payslips or invoices.
+
+---
+
+## 1a. Running the tests
+
+```bash
+npm install
+npm test
+```
+
+This boots the server against a throwaway data directory (so your real
+`data/` and `pdfs/` are untouched) and checks the API end to end: auth, staff
+and client CRUD, archiving, PDF round-trips, invoice numbering, and that a
+malicious invoice number can't write outside `pdfs/`. Worth running before
+deploying a change.
 
 ---
 
@@ -272,5 +309,35 @@ email) → for each invoice, click the client, set the invoice number/date/
 line items → Generate → Download (to send) → Save to Archive (to keep a
 copy in Drive).
 
-Both modules share one login and one Drive sync — nothing extra to set up
+**Recurring invoices:** Dashboard → Archive → Invoices tab → **Duplicate** on
+a past invoice. Everything except the invoice number and dates comes across,
+so a repeat job for the same vessel is a couple of clicks.
+
+**Finding an old document:** Dashboard → Archive, then search by staff name,
+month, client, or invoice number.
+
+All modules share one login and one Drive sync — nothing extra to set up
 per module.
+
+---
+
+## 10. Notes for whoever maintains this
+
+**No internet needed to make a PDF.** `html2canvas` and `jsPDF` are vendored
+in `public/vendor/` rather than loaded from a CDN, so PDF generation keeps
+working if the office connection drops. See `public/vendor/README.md` before
+changing their versions — they control what the printed document looks like.
+
+**PDFs are page images, not text.** Each page is a JPEG of the rendered HTML
+embedded in a PDF, so the text isn't selectable or searchable inside the PDF.
+That's a deliberate trade for pixel-exact branding. JPEG (not PNG) keeps a
+one-page document around 250 KB; PNG made it ~13 MB, which is too large to
+upload and would bloat the Drive archive.
+
+**Storage paths are configurable.** `DDS_DATA_DIR` and `DDS_PDF_DIR` override
+where the JSON files and PDFs live, if you'd rather mount volumes somewhere
+other than `/app/data` and `/app/pdfs`.
+
+**The JSON files are the database.** They're written with a temp-file-plus-
+rename so an unlucky crash or power cut can't leave a half-written file that
+the app then can't read. Back up `data/` (Section 7).

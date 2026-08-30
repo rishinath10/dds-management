@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/assets/dds-logo-mark.png">
+<title>DDS Marine — Archive</title>
+<style>
+  :root{
+    --navy:#0E2240; --navy-light:#16305c; --gold:#C8973F; --gold-light:#e0b968;
+    --cream:#F7F3EA; --ink:#1c1c1c; --muted:#6b7280; --line:#e3ddcd; --danger:#b3261e;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Helvetica Neue', Arial, sans-serif;background:var(--cream);color:var(--ink);}
+  .topbar{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;}
+  .topbar .logo-mini{width:40px;height:40px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold);flex-shrink:0;overflow:hidden;}
+  .topbar .logo-mini img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+  .topbar h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.3px;}
+  .topbar p{margin:0;font-size:12px;color:var(--gold-light);}
+  .topbar p a{color:var(--gold-light);}
+
+  .wrap{max-width:1040px;margin:0 auto;padding:26px 24px 60px 24px;}
+
+  .tabs{display:flex;gap:8px;margin-bottom:18px;}
+  .tab{
+    padding:10px 20px;border-radius:9px;border:1px solid var(--line);background:#fff;
+    color:var(--navy);font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;
+  }
+  .tab.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .tab .count{
+    display:inline-block;margin-left:7px;font-size:11.5px;font-weight:700;
+    background:rgba(14,34,64,.08);color:var(--navy);border-radius:20px;padding:1px 8px;
+  }
+  .tab.active .count{background:rgba(255,255,255,.16);color:var(--gold-light);}
+
+  .toolbar{display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .toolbar input[type=search]{
+    flex:1;min-width:220px;padding:10px 12px;border:1px solid #d7d2c2;border-radius:8px;
+    font-size:14px;font-family:inherit;background:#fff;
+  }
+  .toolbar input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,151,63,.15);}
+  .toolbar .tally{font-size:12.5px;color:var(--muted);white-space:nowrap;}
+
+  .panel{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  table.list{width:100%;border-collapse:collapse;}
+  table.list thead th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+    color:#fff;background:var(--navy);padding:10px 14px;font-weight:600;white-space:nowrap;
+  }
+  table.list thead th.num, table.list tbody td.num{text-align:right;}
+  table.list tbody td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  table.list tbody tr:last-child td{border-bottom:none;}
+  table.list tbody tr:hover{background:#fbfaf6;}
+  table.list tbody td.num{font-variant-numeric:tabular-nums;white-space:nowrap;}
+  td .primary{font-weight:600;color:var(--navy);}
+  td .secondary{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  td.actions{text-align:right;white-space:nowrap;}
+
+  .link-btn{
+    display:inline-block;padding:6px 12px;border-radius:6px;font-size:12.5px;font-weight:600;
+    text-decoration:none;border:1px solid var(--navy);color:var(--navy);background:#fff;margin-left:6px;
+    font-family:inherit;cursor:pointer;
+  }
+  .link-btn:hover{background:var(--cream);}
+  .link-btn.gold{border-color:var(--gold);color:#8a6420;}
+  .link-btn.gold:hover{background:#fff8ea;}
+
+  .empty-state{text-align:center;padding:56px 20px;color:var(--muted);}
+  .empty-state .big-icon{font-size:38px;margin-bottom:10px;}
+  .empty-state p{margin:0 0 4px 0;font-size:14px;}
+  .empty-state .hint{font-size:12.5px;}
+
+  .note{
+    margin-top:16px;font-size:12px;color:var(--muted);line-height:1.6;
+    border-top:1px dashed var(--line);padding-top:12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="display:flex;align-items:center;text-decoration:none;" title="Back to Dashboard">
+    <div class="logo-mini"><img src="/assets/dds-logo-mark.png" alt="DDS"></div>
+  </a>
+  <div>
+    <h1>DDS Marine — Archive</h1>
+    <p>Everything saved with “Save to Archive” · <a href="/">← Dashboard</a></p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="tabs">
+    <button class="tab active" id="tabPayslips" data-view="payslips">Payslips <span class="count" id="countPayslips">0</span></button>
+    <button class="tab" id="tabInvoices" data-view="invoices">Invoices <span class="count" id="countInvoices">0</span></button>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="searchBox" placeholder="Search by name, month, invoice number…">
+    <span class="tally" id="tally"></span>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+  <div class="note" id="noteEl"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+  const rm = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const escapeHtml = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  let view = 'payslips';
+  let payslips = [];
+  let invoices = [];
+
+  async function apiGet(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('GET '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+
+  function monthLabel(ym){
+    if(!ym) return '—';
+    const [y,m] = String(ym).split('-');
+    const d = new Date(Number(y), Number(m)-1, 1);
+    return isNaN(d) ? ym : d.toLocaleDateString('en-MY', {month:'long', year:'numeric'});
+  }
+
+  function dateLabel(ymd){
+    if(!ymd) return '—';
+    const d = new Date(ymd);
+    return isNaN(d) ? ymd : d.toLocaleDateString('en-MY', {day:'2-digit', month:'short', year:'numeric'});
+  }
+
+  function savedLabel(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    return isNaN(d) ? '—' : d.toLocaleDateString('en-MY', {day:'2-digit', month:'short', year:'numeric'});
+  }
+
+  // Newest first — the archive is read far more often at the top than the bottom.
+  const byNewest = (a,b) => String(b.savedAt||'').localeCompare(String(a.savedAt||''));
+
+  async function load(){
+    try{
+      [payslips, invoices] = await Promise.all([
+        apiGet('/api/payslips'),
+        apiGet('/api/invoices')
+      ]);
+    }catch(e){
+      console.error(e);
+      $('panel').innerHTML = '<div class="empty-state"><div class="big-icon">⚠️</div>'+
+        '<p>Could not load the archive.</p><div class="hint">Check that the server is running.</div></div>';
+      return;
+    }
+    payslips = payslips.slice().sort(byNewest);
+    invoices = invoices.slice().sort(byNewest);
+    $('countPayslips').textContent = payslips.length;
+    $('countInvoices').textContent = invoices.length;
+    render();
+  }
+
+  function matches(record, term){
+    if(!term) return true;
+    const haystack = view === 'payslips'
+      ? [record.employeeName, record.payMonth, monthLabel(record.payMonth), record.filename]
+      : [record.invoiceNumber, record.clientName, record.filename, record.notes];
+    return haystack.filter(Boolean).join(' ').toLowerCase().includes(term);
+  }
+
+  function renderPayslipRows(rows){
+    return rows.map(p => {
+      const net = p.figures && p.figures.net != null ? rm(p.figures.net) : '—';
+      const gross = p.figures && p.figures.gross != null ? rm(p.figures.gross) : '';
+      return `
+        <tr>
+          <td>
+            <div class="primary">${escapeHtml(p.employeeName || 'Unnamed')}</div>
+            <div class="secondary">${escapeHtml(p.filename || '')}</div>
+          </td>
+          <td>${escapeHtml(monthLabel(p.payMonth))}</td>
+          <td class="num">${gross || '—'}</td>
+          <td class="num"><strong>${net}</strong></td>
+          <td>${escapeHtml(savedLabel(p.savedAt))}</td>
+          <td class="actions">
+            <a class="link-btn" href="/api/payslips/${encodeURIComponent(p.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function renderInvoiceRows(rows){
+    return rows.map(i => `
+      <tr>
+        <td>
+          <div class="primary">#${escapeHtml(i.invoiceNumber)}</div>
+          <div class="secondary">${escapeHtml(i.filename || '')}</div>
+        </td>
+        <td>
+          <div>${escapeHtml(i.clientName || '—')}</div>
+          ${i.items && i.items.length ? `<div class="secondary">${i.items.length} line item${i.items.length===1?'':'s'}</div>` : ''}
+        </td>
+        <td>${escapeHtml(dateLabel(i.date || i.savedAt))}</td>
+        <td class="num"><strong>${rm(i.total)}</strong></td>
+        <td>${escapeHtml(savedLabel(i.savedAt))}</td>
+        <td class="actions">
+          <a class="link-btn" href="/api/invoices/${encodeURIComponent(i.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+          ${i.items && i.items.length
+            ? `<a class="link-btn gold" href="/invoice.html?duplicate=${encodeURIComponent(i.id)}" title="Open a new invoice pre-filled from this one">Duplicate</a>`
+            : ''}
+        </td>
+      </tr>`).join('');
+  }
+
+  function render(){
+    const term = $('searchBox').value.trim().toLowerCase();
+    const source = view === 'payslips' ? payslips : invoices;
+    const rows = source.filter(r => matches(r, term));
+
+    $('tally').textContent = term
+      ? `${rows.length} of ${source.length} shown`
+      : `${source.length} archived`;
+
+    if(!source.length){
+      $('panel').innerHTML = `
+        <div class="empty-state">
+          <div class="big-icon">${view === 'payslips' ? '🧾' : '📄'}</div>
+          <p>Nothing archived yet.</p>
+          <div class="hint">Generate a ${view === 'payslips' ? 'payslip' : 'invoice'} and click
+            “Save to Archive” — it will appear here and sync to Drive.</div>
+        </div>`;
+      return;
+    }
+
+    if(!rows.length){
+      $('panel').innerHTML = `<div class="empty-state"><div class="big-icon">🔍</div>
+        <p>No matches for “${escapeHtml(term)}”.</p></div>`;
+      return;
+    }
+
+    const head = view === 'payslips'
+      ? `<tr><th>Employee</th><th>Pay period</th><th class="num">Gross</th><th class="num">Net pay</th><th>Archived</th><th></th></tr>`
+      : `<tr><th>Invoice</th><th>Client</th><th>Date</th><th class="num">Total</th><th>Archived</th><th></th></tr>`;
+
+    $('panel').innerHTML = `<table class="list"><thead>${head}</thead><tbody>${
+      view === 'payslips' ? renderPayslipRows(rows) : renderInvoiceRows(rows)
+    }</tbody></table>`;
+  }
+
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.onclick = () => {
+      view = btn.dataset.view;
+      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+      render();
+    };
+  });
+
+  $('searchBox').oninput = render;
+
+  $('noteEl').textContent =
+    'PDFs open from the server copy in pdfs/ — the same files rclone syncs to Google Drive. ' +
+    'Re-archiving the same payslip month or invoice number replaces the earlier copy rather than adding a duplicate.';
+
+  load();
+})();
+</script>
+</body>
+</html>

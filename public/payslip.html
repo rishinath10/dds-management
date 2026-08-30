@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/assets/dds-logo-mark.png">
 <title>DDS Marine — Payslip Generator</title>
 <style>
   :root{
@@ -198,6 +199,21 @@
   .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
 
   .hidden{display:none !important;}
+
+  .past-row{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;
+  }
+  .past-row:last-child{border-bottom:none;}
+  .past-row .pm{font-weight:600;color:var(--navy);}
+  .past-row .net{color:var(--muted);font-variant-numeric:tabular-nums;}
+  .past-row a{
+    font-size:12.5px;font-weight:600;color:var(--navy);text-decoration:none;
+    border:1px solid var(--navy);border-radius:6px;padding:5px 11px;
+  }
+  .past-row a:hover{background:var(--cream);}
+  .past-empty{font-size:13px;color:var(--muted);}
+
   .empty-state{
     text-align:center;padding:60px 20px;color:var(--muted);
   }
@@ -296,7 +312,7 @@
   </a>
   <div>
     <h1>DDS Marine — Payslip Generator</h1>
-    <p>Simple monthly payslips with auto-calculated EPF / SOCSO / EIS · <a href="/" style="color:var(--gold-light);">← Dashboard</a></p>
+    <p>Simple monthly payslips with auto-calculated EPF / SOCSO / EIS · <a href="/" style="color:var(--gold-light);">← Dashboard</a> · <a href="/archive.html" style="color:var(--gold-light);">Archive</a></p>
   </div>
 </div>
 
@@ -403,6 +419,7 @@
       <div class="btn-row">
         <button class="btn btn-primary" id="saveStaffBtn">Save Staff</button>
         <button class="btn btn-text" id="cancelStaffBtn">Cancel</button>
+        <button class="btn btn-text hidden" id="deleteStaffBtn" style="color:var(--danger);margin-left:auto;">Delete this staff member</button>
       </div>
     </div>
 
@@ -414,6 +431,14 @@
           <p class="sub" style="margin-bottom:0;" id="payRunSub"></p>
         </div>
         <button class="btn btn-text" id="editThisStaffBtn">Edit staff profile</button>
+      </div>
+
+      <!-- Payslips already archived for this person, so a month isn't
+           accidentally generated and sent twice. -->
+      <div class="card hidden" id="pastPayslipsCard">
+        <h2>Already Archived</h2>
+        <p class="sub">Payslips saved for this staff member. Re-archiving the same month replaces that copy.</p>
+        <div id="pastPayslipsList"></div>
       </div>
 
       <div class="card">
@@ -516,8 +541,10 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Vendored locally (see public/vendor/README.md) so PDF generation keeps
+     working without internet access and cannot break if a CDN does. -->
+<script src="/vendor/html2canvas.min.js"></script>
+<script src="/vendor/jspdf.umd.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -530,7 +557,18 @@
   }
   async function apiPost(url, body){
     const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-    if(!r.ok) throw new Error('POST '+url+' failed ('+r.status+')');
+    if(!r.ok){
+      // The server explains real failures (too large, bad PDF) in JSON — pass
+      // that through so the UI can show something actionable.
+      let detail = '';
+      try{ detail = (await r.json()).error || ''; }catch(e){}
+      throw new Error(detail || ('POST '+url+' failed ('+r.status+')'));
+    }
+    return r.json();
+  }
+  async function apiDelete(url){
+    const r = await fetch(url, {method:'DELETE'});
+    if(!r.ok) throw new Error('DELETE '+url+' failed ('+r.status+')');
     return r.json();
   }
 
@@ -672,8 +710,29 @@
     $('empEpfNo').value = emp ? emp.epfNo : '';
     $('empSocsoNo').value = emp ? emp.socsoNo : '';
     $('staffFormCard').dataset.editingId = emp ? emp.id : '';
+    $('deleteStaffBtn').classList.toggle('hidden', !emp);
     $('staffFormCard').classList.remove('hidden');
   }
+
+  $('deleteStaffBtn').onclick = async ()=>{
+    const id = $('staffFormCard').dataset.editingId;
+    const emp = employees.find(e=>e.id===id);
+    if(!emp) return;
+    if(!confirm(`Remove ${emp.name} from the staff list?\n\nPayslips already archived for them are kept.`)) return;
+    try{
+      await apiDelete('/api/employees/'+encodeURIComponent(id));
+    }catch(e){
+      console.error(e);
+      alert('Could not delete staff — check the server is running.');
+      return;
+    }
+    employees = employees.filter(e=>e.id!==id);
+    selectedEmpId = null;
+    renderStaffList();
+    hideAllPanels();
+    if(employees.length) selectEmployee(employees[0].id);
+    else $('emptyState').classList.remove('hidden');
+  };
 
   $('saveStaffBtn').onclick = async ()=>{
     const editingId = $('staffFormCard').dataset.editingId;
@@ -725,6 +784,7 @@
     renderDeductionRows();
     $('payRunArea').classList.remove('hidden');
     updateSummary();
+    loadArchiveForSelected();
   }
 
   function renderAllowanceRows(){
@@ -952,25 +1012,59 @@
     `;
   }
 
+  // ---------- previously archived payslips for the selected staff ----------
+  async function loadArchiveForSelected(){
+    const card = $('pastPayslipsCard');
+    if(!selectedEmpId){ card.classList.add('hidden'); return; }
+    const empId = selectedEmpId;
+    let rows = [];
+    try{
+      rows = await apiGet('/api/payslips?employeeId=' + encodeURIComponent(empId));
+    }catch(e){
+      console.error(e);
+      card.classList.add('hidden');
+      return;
+    }
+    // The user may have clicked another staff member while this was in flight.
+    if(empId !== selectedEmpId) return;
+
+    if(!rows.length){
+      $('pastPayslipsList').innerHTML = '<div class="past-empty">No payslips archived for this staff member yet.</div>';
+    } else {
+      rows.sort((a,b)=> String(b.payMonth||'').localeCompare(String(a.payMonth||'')));
+      $('pastPayslipsList').innerHTML = rows.map(r=>`
+        <div class="past-row">
+          <span class="pm">${escapeHtml(monthLabel(r.payMonth))}</span>
+          <span class="net">${r.figures && r.figures.net != null ? 'Net ' + rm(r.figures.net) : ''}</span>
+          <a href="/api/payslips/${encodeURIComponent(r.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+        </div>`).join('');
+    }
+    card.classList.remove('hidden');
+  }
+
   // ---------- PDF / print ----------
   $('printBtn').onclick = ()=> window.print();
 
   async function buildPdf(){
     const node = $('payslipDoc');
     const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
-    const imgData = canvas.toDataURL('image/png');
+    // JPEG, not PNG: a full A4 page rendered at scale 2 is a ~13 MB lossless
+    // PNG, which blew past the server's upload limit and made every archive
+    // save fail. At quality 0.95 the same page is a few hundred KB and still
+    // sharp at print size — and the Drive archive stays a sane size.
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p','mm','a4');
     const pageWidth = 210, pageHeight = 297;
     const imgWidth = pageWidth;
     const imgHeight = canvas.height * imgWidth / canvas.width;
     let heightLeft = imgHeight, position = 0;
-    pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+    pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight);
     heightLeft -= pageHeight;
     while(heightLeft > 0){
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData,'PNG',0,position,imgWidth,imgHeight);
+      pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight);
       heightLeft -= pageHeight;
     }
     return pdf;
@@ -1006,19 +1100,43 @@
       const pdf = await buildPdf();
       const pdfBase64 = pdf.output('datauristring');
       const emp = employees.find(e=>e.id===selectedEmpId);
-      await apiPost('/api/payslips', {
+      const p = currentPayslip;
+      const res = await apiPost('/api/payslips', {
         employeeId: selectedEmpId,
         employeeName: emp ? emp.name : 'staff',
-        payMonth: currentPayslip.payMonth,
-        pdfBase64
+        payMonth: p.payMonth,
+        pdfBase64,
+        // Stored alongside the PDF so the archive can show real figures and
+        // statutory totals can be summed without reopening every document.
+        figures: {
+          basic: p.basic,
+          allowances: p.allowTotal,
+          ot: p.otAmt,
+          commission: p.comm,
+          gross: p.gross,
+          epfEmployee: p.epf.employee,
+          epfEmployer: p.epf.employer,
+          socsoEmployee: p.socso.employee,
+          socsoEmployer: p.socso.employer,
+          eisEmployee: p.eis.employee,
+          eisEmployer: p.eis.employer,
+          otherDeductions: p.otherDedTotal,
+          totalDeductions: p.totalDeductions,
+          net: p.net,
+          payDate: p.payDate
+        }
       });
-      btn.textContent = 'Saved to Archive ✓';
+      btn.textContent = res && res.replaced ? 'Archive updated ✓' : 'Saved to Archive ✓';
+      loadArchiveForSelected();
     }catch(err){
       console.error(err);
       btn.textContent = 'Save failed';
+      // A silent failure here means the user believes a document was archived
+      // when it wasn't — always say why.
+      alert('Could not save to the archive.\n\n' + (err && err.message ? err.message : err));
     }finally{
       btn.disabled = false;
-      setTimeout(()=>{ btn.textContent = original; }, 2000);
+      setTimeout(()=>{ btn.textContent = original; }, 2500);
     }
   };
 
