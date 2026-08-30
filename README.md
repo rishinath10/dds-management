@@ -22,6 +22,9 @@ public/
   assets/dds-logo-mark.png  Diamond mark only (used in small circular badges)
   vendor/                   jsPDF, vendored (see vendor/README.md)
 test/api.test.js          API tests — run with `npm test`
+scripts/
+  trace-logo.js            Regenerates the vector logo from the artwork
+  dds-logo-mark.png        The DDS logo artwork the vector mark is traced from
 data/                     employees.json, clients.json, company.json,
                            invoice_settings.json, payslips.json, invoices.json
                            (all auto-created on first run)
@@ -351,8 +354,22 @@ regenerate a document and compare.
 Fonts are jsPDF's built-in Helvetica, one of the 14 standard PDF fonts, so
 nothing is embedded and files stay small. A PDF editor may substitute a local
 equivalent (usually Arial) when you edit; the text stays fully editable either
-way. The DDS diamond mark is drawn as vector paths rather than placed as the
-PNG, so it stays crisp at any zoom and can be recoloured in Illustrator.
+way.
+
+**The logo is vector too.** The DDS mark is drawn as vector paths rather than
+placed as the PNG, so it stays crisp at any zoom and can be recoloured or
+reshaped in Illustrator. Those paths are traced from the real logo artwork —
+the diamond from its measured proportions, the DDS letterforms from the
+artwork's own outlines. The artwork is kept at `scripts/dds-logo-mark.png` and
+`node scripts/trace-logo.js` regenerates the path data, so if the logo ever
+changes the mark can be reproduced rather than redrawn by hand.
+
+One deliberate simplification: the artwork's gold is a gentle gradient
+(#FDBA52 at the top and bottom vertices to #D88D0E at the sides), and the PDF
+fills the band with the mean gold instead. jsPDF only does gradients in an
+"advanced" API mode that flips the coordinate system, and at the 18-24mm the
+mark actually prints at the difference isn't visible — a single flat path is
+also easier to edit downstream than four gradient-filled wedges.
 
 **Storage paths are configurable.** `DDS_DATA_DIR` and `DDS_PDF_DIR` override
 where the JSON files and PDFs live, if you'd rather mount volumes somewhere

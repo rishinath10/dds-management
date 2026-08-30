@@ -112,40 +112,115 @@
     }
   }
 
-  /**
-   * The DDS diamond mark, drawn as vector paths: a gold diamond ring with the
-   * letters DDS inside. Drawn rather than placed as a PNG so the logo is
-   * editable and stays crisp — this is the whole point of the vector export.
-   */
+  // ---------------------------------------------------------------- logo
+  //
+  // The DDS mark, as vector paths traced from the supplied logo artwork rather
+  // than approximated — the diamond band from its measured proportions, the
+  // DDS letterforms from the artwork's own outlines. Drawing it (instead of
+  // placing the PNG) is what keeps the whole exported page vector: the mark
+  // stays crisp at any zoom and can be recoloured or reshaped in Illustrator.
+  //
+  // Coordinates are normalised against the artwork: the origin is the centre
+  // of the diamond and 1 unit is its half-width, so the whole mark scales from
+  // a single `size` argument.
+  //
+  // Measured from the artwork (1593x1639 px, centre 796,819, half-width 796):
+  var LOGO_INNER = 0.8656;  // inner diamond / outer, i.e. the band thickness
+  var LOGO_ASPECT = 1.0264; // half-height / half-width — slightly tall, as drawn
+  // The artwork's gold is a gentle gradient (#FDBA52 at the top and bottom
+  // vertices to #D88D0E at the left and right). jsPDF 2.5.1 can only do
+  // gradients in its "advanced" API mode, which flips the coordinate system
+  // and would have to be entered and left around every logo; at 18-24mm the
+  // difference is not visible, so the band is filled with the artwork's mean
+  // gold and stays a single clean path that is easy to edit downstream.
+  var LOGO_GOLD = [232, 161, 48];
+  var LOGO_NAVY = [16, 56, 118];
+
+  // Letter outlines, traced from the artwork with potrace and normalised.
+  // Flat command stream: 0 = moveTo(x,y), 1 = curveTo(6), 2 = lineTo(2),
+  // 3 = closePath. Regenerate with `node scripts/trace-logo.js` if the mark changes.
+  var LOGO_LETTERS = [
+    0, 0.3976, -0.2411, 1, 0.3483, -0.2346, 0.3216, -0.1997, 0.3216, -0.142,
+    1, 0.3216, -0.0938, 0.3389, -0.062, 0.3911, -0.0142, 1, 0.4206, 0.0128,
+    0.4357, 0.0335, 0.4405, 0.0535, 1, 0.4416, 0.0584, 0.4426, 0.0679,
+    0.4426, 0.0754, 1, 0.4429, 0.1033, 0.4342, 0.1151, 0.4125, 0.1166, 1,
+    0.4048, 0.1171, 0.4026, 0.1167, 0.3967, 0.114, 1, 0.3832, 0.1078,
+    0.3796, 0.0992, 0.3785, 0.07, 2, 0.3778, 0.0503, 2, 0.3491, 0.0503, 2,
+    0.3204, 0.0503, 2, 0.3204, 0.0669, 1, 0.3204, 0.0948, 0.3233, 0.1119,
+    0.331, 0.1288, 1, 0.3441, 0.1573, 0.3681, 0.1723, 0.4039, 0.1742, 1,
+    0.4629, 0.1774, 0.4972, 0.1482, 0.5039, 0.0892, 1, 0.5064, 0.0675,
+    0.5037, 0.0414, 0.4969, 0.0214, 1, 0.4885, -0.0032, 0.4776, -0.0176,
+    0.4364, -0.0584, 1, 0.4021, -0.0924, 0.3939, -0.1025, 0.3883, -0.1174,
+    1, 0.3804, -0.1387, 0.3822, -0.1648, 0.3923, -0.1757, 1, 0.4003,
+    -0.1842, 0.4171, -0.1867, 0.4288, -0.181, 1, 0.4407, -0.1752, 0.4449,
+    -0.1644, 0.4448, -0.1398, 2, 0.4447, -0.1231, 2, 0.4742, -0.1231, 2,
+    0.5038, -0.1231, 2, 0.5038, -0.1367, 1, 0.5038, -0.175, 0.4956, -0.2003,
+    0.4774, -0.2187, 1, 0.4668, -0.2295, 0.4575, -0.2347, 0.4421, -0.2386,
+    1, 0.4305, -0.2415, 0.4096, -0.2427, 0.3976, -0.2411, 0, -0.4083,
+    -0.0339, 2, -0.4083, 0.1685, 2, -0.3483, 0.1681, 2, -0.2883, 0.1677, 2,
+    -0.2764, 0.1636, 1, -0.2449, 0.1527, -0.2271, 0.129, -0.2224, 0.0916, 1,
+    -0.2216, 0.085, -0.2211, 0.0384, -0.2211, -0.0353, 1, -0.2211, -0.1339,
+    -0.2214, -0.1534, -0.223, -0.1628, 1, -0.227, -0.1858, -0.2337, -0.1999,
+    -0.2469, -0.2131, 1, -0.257, -0.2231, -0.2663, -0.2283, -0.282, -0.2327,
+    1, -0.2916, -0.2353, -0.2949, -0.2354, -0.3502, -0.2359, 2, -0.4083,
+    -0.2363, 2, -0.4083, -0.0339, 0, -0.0389, -0.0339, 2, -0.039, 0.1685, 2,
+    0.021, 0.1681, 2, 0.081, 0.1677, 2, 0.093, 0.1636, 1, 0.1175, 0.1551,
+    0.132, 0.141, 0.1407, 0.117, 1, 0.1483, 0.0961, 0.1484, 0.0948, 0.148,
+    -0.0396, 2, 0.1476, -0.1614, 2, 0.1442, -0.1737, 1, 0.1394, -0.1911,
+    0.1332, -0.2023, 0.1224, -0.2131, 1, 0.1124, -0.2231, 0.1031, -0.2282,
+    0.0871, -0.2327, 1, 0.0778, -0.2353, 0.074, -0.2354, 0.0192, -0.2359, 2,
+    -0.0389, -0.2364, 2, -0.0389, -0.0339, 0, -0.3457, -0.1772, 1, -0.3459,
+    -0.1765, -0.346, -0.1114, -0.3458, -0.0326, 2, -0.3455, 0.1107, 2,
+    -0.3236, 0.1103, 2, -0.3017, 0.1099, 2, -0.2963, 0.1062, 1, -0.2925,
+    0.1035, -0.2897, 0.1001, -0.2871, 0.0948, 2, -0.2833, 0.0873, 2,
+    -0.2833, -0.034, 2, -0.2833, -0.1553, 2, -0.2871, -0.1627, 1, -0.29,
+    -0.1684, -0.2923, -0.171, -0.297, -0.174, 1, -0.3031, -0.1777, -0.3033,
+    -0.1778, -0.3242, -0.1782, 1, -0.3385, -0.1785, -0.3453, -0.1782,
+    -0.3457, -0.1772, 0, 0.0239, -0.1763, 1, 0.0236, -0.1227, 0.024, 0.1099,
+    0.0244, 0.1102, 1, 0.0256, 0.1114, 0.0639, 0.1106, 0.0673, 0.1093, 1,
+    0.074, 0.1067, 0.0794, 0.1015, 0.0828, 0.0944, 2, 0.0861, 0.0873, 2,
+    0.0864, -0.0289, 1, 0.0867, -0.1117, 0.0864, -0.1473, 0.0854, -0.1526,
+    1, 0.0834, -0.1631, 0.0791, -0.1701, 0.0719, -0.1743, 1, 0.0661,
+    -0.1777, 0.0653, -0.1778, 0.0449, -0.1782, 1, 0.0252, -0.1786, 0.0239,
+    -0.1785, 0.0239, -0.1763
+  ];
+
+  function diamondPath(pdf, cx, cy, halfW, halfH) {
+    pdf.moveTo(cx, cy - halfH);
+    pdf.lineTo(cx + halfW, cy);
+    pdf.lineTo(cx, cy + halfH);
+    pdf.lineTo(cx - halfW, cy);
+    pdf.close();
+  }
+
   function drawLogoMark(pdf, cx, cy, size) {
     var r = size / 2;
-    var inner = r * 0.76; // ring thickness
+    var rh = r * LOGO_ASPECT;
 
-    function diamond(radius) {
-      return [
-        [radius, radius], [-radius, radius], [-radius, -radius]
-      ];
+    // Band: outer diamond with the inner one knocked out, filled even-odd so
+    // it stays one path with a hole rather than two stacked shapes.
+    pdf.setFillColor(LOGO_GOLD[0], LOGO_GOLD[1], LOGO_GOLD[2]);
+    diamondPath(pdf, cx, cy, r, rh);
+    diamondPath(pdf, cx, cy, r * LOGO_INNER, rh * LOGO_INNER);
+    pdf.fillEvenOdd();
+
+    // Letters.
+    pdf.setFillColor(LOGO_NAVY[0], LOGO_NAVY[1], LOGO_NAVY[2]);
+    var i = 0, X = function (v) { return cx + v * r; }, Y = function (v) { return cy + v * r; };
+    while (i < LOGO_LETTERS.length) {
+      var op = LOGO_LETTERS[i];
+      if (op === 0) { pdf.moveTo(X(LOGO_LETTERS[i + 1]), Y(LOGO_LETTERS[i + 2])); i += 3; }
+      else if (op === 2) { pdf.lineTo(X(LOGO_LETTERS[i + 1]), Y(LOGO_LETTERS[i + 2])); i += 3; }
+      else if (op === 1) {
+        pdf.curveTo(X(LOGO_LETTERS[i + 1]), Y(LOGO_LETTERS[i + 2]),
+                    X(LOGO_LETTERS[i + 3]), Y(LOGO_LETTERS[i + 4]),
+                    X(LOGO_LETTERS[i + 5]), Y(LOGO_LETTERS[i + 6]));
+        i += 7;
+      } else { pdf.close(); i += 1; }
     }
-
-    // Outer diamond filled gold, inner diamond knocked back out in white —
-    // together they read as a diamond outline of even thickness.
-    pdf.setFillColor(GOLD[0], GOLD[1], GOLD[2]);
-    pdf.lines(diamond(r), cx, cy - r, [1, 1], 'F', true);
-    pdf.setFillColor(WHITE[0], WHITE[1], WHITE[2]);
-    pdf.lines(diamond(inner), cx, cy - inner, [1, 1], 'F', true);
-
-    // "DDS" centred inside, letter-spaced to match the brand mark.
-    var letterSize = size * 0.36;
-    setFont(pdf, 'bold', letterSize, NAVY);
-    var gap = size * 0.075;
-    var letters = ['D', 'D', 'S'];
-    var widths = letters.map(function (ch) { return pdf.getTextWidth(ch); });
-    var totalW = widths.reduce(function (a, b) { return a + b; }, 0) + gap * (letters.length - 1);
-    var x = cx - totalW / 2;
-    letters.forEach(function (ch, i) {
-      pdf.text(ch, x, cy + letterSize * 0.35 / 2.83465);
-      x += widths[i] + gap;
-    });
+    // Even-odd, so the enclosed subpaths punch out the counters of the two
+    // D's regardless of which direction the tracer wound them.
+    pdf.fillEvenOdd();
   }
 
   // Draw text and return the y position just past it, wrapping to `width`.
@@ -525,6 +600,7 @@
     // Exposed for tests / reuse.
     money: money,
     monthLabel: monthLabel,
-    dateLabel: dateLabel
+    dateLabel: dateLabel,
+    drawLogoMark: drawLogoMark
   };
 })(typeof window !== 'undefined' ? window : this);
