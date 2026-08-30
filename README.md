@@ -17,9 +17,10 @@ public/
   payslip.html             Payslip generator (staff, EPF/SOCSO/EIS calc)
   invoice.html             Invoice generator (clients, line items)
   archive.html             Browse/search everything archived, reopen PDFs
+  pdf-docs.js              Draws the payslip + invoice as vector PDFs
   assets/dds-logo.png       Full logo + tagline (used on invoices)
   assets/dds-logo-mark.png  Diamond mark only (used in small circular badges)
-  vendor/                   html2canvas + jsPDF, vendored (see vendor/README.md)
+  vendor/                   jsPDF, vendored (see vendor/README.md)
 test/api.test.js          API tests — run with `npm test`
 data/                     employees.json, clients.json, company.json,
                            invoice_settings.json, payslips.json, invoices.json
@@ -34,6 +35,13 @@ pdfs/
 an invoice uploads the generated PDF to the server, which writes it to
 `pdfs/payslips/` or `pdfs/invoices/` respectively. "Download PDF" is separate
 — that one only saves to your own device and never touches the server.
+
+**PDFs are vector.** Both documents are generated as true vector PDFs: the
+text is real text (selectable, searchable) and the rules, tables and logo are
+vector shapes. That means you can open a downloaded or archived PDF in Adobe
+Illustrator or any PDF editor and edit it — retype a line, nudge the layout,
+recolour the logo — without it turning into a blurry image. Files are around
+12-15 KB each.
 
 **Browsing what you've archived:** the **Archive** page (`/archive.html`, also
 linked from the dashboard) lists every payslip and invoice that was saved,
@@ -328,11 +336,23 @@ in `public/vendor/` rather than loaded from a CDN, so PDF generation keeps
 working if the office connection drops. See `public/vendor/README.md` before
 changing their versions — they control what the printed document looks like.
 
-**PDFs are page images, not text.** Each page is a JPEG of the rendered HTML
-embedded in a PDF, so the text isn't selectable or searchable inside the PDF.
-That's a deliberate trade for pixel-exact branding. JPEG (not PNG) keeps a
-one-page document around 250 KB; PNG made it ~13 MB, which is too large to
-upload and would bloat the Drive archive.
+**PDFs are true vector, and editable.** `public/pdf-docs.js` draws the payslip
+and the invoice with jsPDF's native primitives — real text, real lines, real
+filled shapes — so the exported file opens in Adobe Illustrator or any PDF
+editor with every element individually selectable and editable, and the text
+is searchable and copyable. Files come out around 12-15 KB.
+
+The catch to know about: **the on-screen preview and the PDF are two separate
+layouts of the same document.** The preview is the HTML in `payslip.html` /
+`invoice.html`; the PDF is the drawing code in `pdf-docs.js`. They're built to
+match, but changing one does not change the other — edit both, then
+regenerate a document and compare.
+
+Fonts are jsPDF's built-in Helvetica, one of the 14 standard PDF fonts, so
+nothing is embedded and files stay small. A PDF editor may substitute a local
+equivalent (usually Arial) when you edit; the text stays fully editable either
+way. The DDS diamond mark is drawn as vector paths rather than placed as the
+PNG, so it stays crisp at any zoom and can be recoloured in Illustrator.
 
 **Storage paths are configurable.** `DDS_DATA_DIR` and `DDS_PDF_DIR` override
 where the JSON files and PDFs live, if you'd rather mount volumes somewhere

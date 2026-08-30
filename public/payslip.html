@@ -533,6 +533,7 @@
         <button class="btn btn-outline" id="printBtn">Print</button>
         <button class="btn btn-primary" id="saveHistoryBtn">Save to Archive (→ Drive)</button>
       </div>
+      <p class="hint" style="margin:0 0 12px 2px;">Downloads as a <strong>vector PDF</strong> — text and graphics stay editable in Adobe Illustrator or any PDF editor, and the text is selectable.</p>
       <div class="payslip-wrap">
         <div id="payslipDoc"><!-- populated by JS --></div>
       </div>
@@ -541,10 +542,11 @@
   </div>
 </div>
 
-<!-- Vendored locally (see public/vendor/README.md) so PDF generation keeps
-     working without internet access and cannot break if a CDN does. -->
-<script src="/vendor/html2canvas.min.js"></script>
+<!-- jsPDF is vendored locally (see public/vendor/README.md) so PDF generation
+     keeps working without internet access and cannot break if a CDN does.
+     pdf-docs.js draws the documents as vector graphics on top of it. -->
 <script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/pdf-docs.js"></script>
 <script>
 (function(){
   "use strict";
@@ -1045,29 +1047,16 @@
   // ---------- PDF / print ----------
   $('printBtn').onclick = ()=> window.print();
 
-  async function buildPdf(){
-    const node = $('payslipDoc');
-    const canvas = await html2canvas(node, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
-    // JPEG, not PNG: a full A4 page rendered at scale 2 is a ~13 MB lossless
-    // PNG, which blew past the server's upload limit and made every archive
-    // save fail. At quality 0.95 the same page is a few hundred KB and still
-    // sharp at print size — and the Drive archive stays a sane size.
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p','mm','a4');
-    const pageWidth = 210, pageHeight = 297;
-    const imgWidth = pageWidth;
-    const imgHeight = canvas.height * imgWidth / canvas.width;
-    let heightLeft = imgHeight, position = 0;
-    pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight);
-    heightLeft -= pageHeight;
-    while(heightLeft > 0){
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData,'JPEG',0,position,imgWidth,imgHeight);
-      heightLeft -= pageHeight;
-    }
-    return pdf;
+  // The PDF is drawn as real vector graphics by /pdf-docs.js — text stays text,
+  // rules stay lines — rather than screenshotting the preview above into a page
+  // image. That's what makes the exported file editable in Adobe Illustrator or
+  // any PDF editor, searchable, and about 14 KB instead of 250 KB.
+  //
+  // The preview in #payslipDoc is the on-screen representation of the same
+  // document; if you change one layout, change the other to match.
+  function buildPdf(){
+    const emp = employees.find(e => e.id === selectedEmpId) || {};
+    return DDSPdf.buildPayslip({ company: company, employee: emp, payslip: currentPayslip });
   }
 
   $('downloadPdfBtn').onclick = async ()=>{
