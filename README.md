@@ -39,6 +39,16 @@ an invoice uploads the generated PDF to the server, which writes it to
 `pdfs/payslips/` or `pdfs/invoices/` respectively. "Download PDF" is separate
 — that one only saves to your own device and never touches the server.
 
+That `pdfs/` folder lives on whatever disk the server runs on — under a
+Dokploy or Coolify-style deploy, that means inside the Docker volume you
+mounted at `/app/pdfs` (Section 2, step 5), physically on the VPS's disk. **It
+is not automatically in Google Drive.** The "→ Drive" part only happens once
+`rclone` has been set up separately (Section 6) — a one-time manual step, not
+something deploying the app does for you. Until that's done, PDFs exist in
+exactly one place: that Docker volume on the VPS. If you're not sure whether
+rclone is running yet, check for `rclone sync` in `crontab -l` on the VPS, or
+just look in the actual Google Drive folder.
+
 **PDFs are vector.** Both documents are generated as true vector PDFs: the
 text is real text (selectable, searchable) and the rules, tables and logo are
 vector shapes. That means you can open a downloaded or archived PDF in Adobe
@@ -48,11 +58,19 @@ recolour the logo — without it turning into a blurry image. Files are around
 
 **Browsing what you've archived:** the **Archive** page (`/archive.html`, also
 linked from the dashboard) lists every payslip and invoice that was saved,
-newest first, with a search box. "View PDF" opens the server's copy — the same
-file rclone syncs to Drive. Each payslip row shows its gross and net pay, and
-each invoice row can be **duplicated**: that reopens the invoice page with the
-same client, line items and notes pre-filled under a fresh invoice number,
-which saves retyping recurring jobs.
+newest first, with a search box. "View PDF" opens the server's own copy —
+the same file rclone syncs to Drive, if rclone is set up. Each payslip row
+shows its gross and net pay, and each invoice row can be **duplicated**: that
+reopens the invoice page with the same client, line items and notes
+pre-filled under a fresh invoice number, which saves retyping recurring jobs.
+
+**Deleting an archived payslip or invoice:** each row in the Archive page has
+a **Delete** button. This is permanent — it removes the PDF from the server
+immediately, and confirms as much before you click through. If rclone is
+running, the next sync (every 5 minutes, per the cron job in Section 6)
+mirrors that deletion to Google Drive too, since `rclone sync` makes the
+Drive folder match the server's exactly. There's no undo and no recycle bin —
+if you need to keep a record but stop it cluttering the list, don't delete it.
 
 **Re-archiving is a replace, not a duplicate.** Saving the same staff member's
 same pay month, or the same invoice number, twice overwrites the earlier PDF

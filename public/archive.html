@@ -64,6 +64,8 @@
   .link-btn:hover{background:var(--cream);}
   .link-btn.gold{border-color:var(--gold);color:#8a6420;}
   .link-btn.gold:hover{background:#fff8ea;}
+  .link-btn.danger{border-color:var(--danger);color:var(--danger);}
+  .link-btn.danger:hover{background:#fdf0ef;}
 
   .empty-state{text-align:center;padding:56px 20px;color:var(--muted);}
   .empty-state .big-icon{font-size:38px;margin-bottom:10px;}
@@ -120,6 +122,11 @@
   async function apiGet(url){
     const r = await fetch(url);
     if(!r.ok) throw new Error('GET '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+  async function apiDelete(url){
+    const r = await fetch(url, {method:'DELETE'});
+    if(!r.ok) throw new Error('DELETE '+url+' failed ('+r.status+')');
     return r.json();
   }
 
@@ -188,6 +195,7 @@
           <td>${escapeHtml(savedLabel(p.savedAt))}</td>
           <td class="actions">
             <a class="link-btn" href="/api/payslips/${encodeURIComponent(p.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+            <button class="link-btn danger" data-delete="payslips" data-id="${escapeHtml(p.id)}" data-label="${escapeHtml((p.employeeName||'this payslip') + ' — ' + monthLabel(p.payMonth))}">Delete</button>
           </td>
         </tr>`;
     }).join('');
@@ -212,6 +220,7 @@
           ${i.items && i.items.length
             ? `<a class="link-btn gold" href="/invoice.html?duplicate=${encodeURIComponent(i.id)}" title="Open a new invoice pre-filled from this one">Duplicate</a>`
             : ''}
+          <button class="link-btn danger" data-delete="invoices" data-id="${escapeHtml(i.id)}" data-label="${escapeHtml('Invoice #' + i.invoiceNumber + ' — ' + (i.clientName||''))}">Delete</button>
         </td>
       </tr>`).join('');
   }
@@ -261,9 +270,37 @@
 
   $('searchBox').oninput = render;
 
+  // Delegated from the panel rather than bound per-row, since rows are
+  // rebuilt on every search keystroke and tab switch.
+  $('panel').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-delete]');
+    if(!btn) return;
+    const kind = btn.dataset.delete, id = btn.dataset.id, label = btn.dataset.label;
+    if(!confirm(`Permanently delete ${label}?\n\nThis removes the PDF from the server and — on the next `+
+                `rclone sync — from Google Drive too. This cannot be undone.`)) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    try{
+      await apiDelete(`/api/${kind}/${encodeURIComponent(id)}`);
+      if(kind === 'payslips') payslips = payslips.filter(p => p.id !== id);
+      else invoices = invoices.filter(i => i.id !== id);
+      $('countPayslips').textContent = payslips.length;
+      $('countInvoices').textContent = invoices.length;
+      render();
+    }catch(err){
+      console.error(err);
+      alert('Could not delete — check the server is running.');
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    }
+  });
+
   $('noteEl').textContent =
-    'PDFs open from the server copy in pdfs/ — the same files rclone syncs to Google Drive. ' +
-    'Re-archiving the same payslip month or invoice number replaces the earlier copy rather than adding a duplicate.';
+    'PDFs open from the server’s own copy in pdfs/ — the same folder rclone syncs to Google Drive, ' +
+    'if rclone has been set up on this server (see the README). Re-archiving the same payslip month or ' +
+    'invoice number replaces the earlier copy rather than adding a duplicate. Deleting here removes the ' +
+    'PDF from the server permanently, and from Drive on the next sync.';
 
   load();
 })();

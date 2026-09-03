@@ -240,6 +240,58 @@ test('unknown archive ids 404 rather than leaking anything', async () => {
   assert.strictEqual((await api('/api/invoices/inv_nope')).status, 404);
 });
 
+// ---------------------------------------------------------------- deleting archived records
+
+test('deletes an archived payslip: record disappears and the PDF is removed from disk', async () => {
+  const emp = await (await postJson('/api/employees', { name: 'Farah Idris' })).json();
+  const saved = await (await postJson('/api/payslips', {
+    employeeId: emp.id, employeeName: 'Farah Idris', payMonth: '2026-05', pdfBase64: PDF_DATA_URI
+  })).json();
+  const filePath = path.join(tmpDir, 'pdfs', 'payslips', saved.filename);
+  assert.ok(fs.existsSync(filePath), 'PDF should exist before delete');
+
+  const del = await api('/api/payslips/' + saved.id, { method: 'DELETE' });
+  assert.strictEqual(del.status, 200);
+  assert.strictEqual((await del.json()).ok, true);
+
+  assert.strictEqual((await api('/api/payslips/' + saved.id + '/pdf')).status, 404);
+  assert.ok(!fs.existsSync(filePath), 'PDF should be removed from disk, not just the record');
+  const remaining = await (await api('/api/payslips?employeeId=' + emp.id)).json();
+  assert.strictEqual(remaining.find(p => p.id === saved.id), undefined);
+});
+
+test('deletes an archived invoice: record disappears and the PDF is removed from disk', async () => {
+  const client = await (await postJson('/api/clients', { name: 'Delete Me Shipping' })).json();
+  const saved = await (await postJson('/api/invoices', {
+    invoiceNumber: '901', clientId: client.id, clientName: client.name, total: 500, pdfBase64: PDF_DATA_URI
+  })).json();
+  const filePath = path.join(tmpDir, 'pdfs', 'invoices', saved.filename);
+  assert.ok(fs.existsSync(filePath), 'PDF should exist before delete');
+
+  const del = await api('/api/invoices/' + saved.id, { method: 'DELETE' });
+  assert.strictEqual(del.status, 200);
+
+  assert.strictEqual((await api('/api/invoices/' + saved.id)).status, 404);
+  assert.strictEqual((await api('/api/invoices/' + saved.id + '/pdf')).status, 404);
+  assert.ok(!fs.existsSync(filePath), 'PDF should be removed from disk, not just the record');
+});
+
+test('deleting an unknown archive id 404s instead of silently no-opping', async () => {
+  assert.strictEqual((await api('/api/payslips/ps_nope', { method: 'DELETE' })).status, 404);
+  assert.strictEqual((await api('/api/invoices/inv_nope', { method: 'DELETE' })).status, 404);
+});
+
+test('deleting a record whose PDF is already missing from disk still succeeds', async () => {
+  const client = await (await postJson('/api/clients', { name: 'Orphan Ltd' })).json();
+  const saved = await (await postJson('/api/invoices', {
+    invoiceNumber: '902', clientId: client.id, clientName: client.name, total: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  fs.unlinkSync(path.join(tmpDir, 'pdfs', 'invoices', saved.filename));
+
+  const del = await api('/api/invoices/' + saved.id, { method: 'DELETE' });
+  assert.strictEqual(del.status, 200, 'a missing file on disk should not block deleting the record');
+});
+
 // ---------------------------------------------------------------- body limits
 
 // Archiving used to fail silently because generated PDFs exceeded the body

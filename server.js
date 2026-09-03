@@ -273,6 +273,22 @@ app.get('/api/payslips/:id/pdf', (req, res) => {
   sendArchivedPdf(res, PDF_PAYSLIPS_DIR, payslips.find(p => p.id === req.params.id));
 });
 
+// Deletes both the archive record and its PDF. The next rclone sync (it runs
+// `rclone sync`, which mirrors deletions) removes it from Drive too — this is
+// permanent, not a trash/recycle bin.
+app.delete('/api/payslips/:id', (req, res) => {
+  const payslips = readJson(PAYSLIPS_FILE) || [];
+  const record = payslips.find(p => p.id === req.params.id);
+  if (!record) return res.status(404).json({ error: 'Payslip not found.' });
+
+  if (record.filename) {
+    try { fs.unlinkSync(path.join(PDF_PAYSLIPS_DIR, record.filename)); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  writeJson(PAYSLIPS_FILE, payslips.filter(p => p.id !== req.params.id));
+  res.json({ ok: true });
+});
+
 // =========================================================
 // Clients (Invoices module)
 // =========================================================
@@ -381,6 +397,22 @@ app.get('/api/invoices/:id', (req, res) => {
 app.get('/api/invoices/:id/pdf', (req, res) => {
   const invoices = readJson(INVOICES_FILE) || [];
   sendArchivedPdf(res, PDF_INVOICES_DIR, invoices.find(i => i.id === req.params.id));
+});
+
+// Deletes both the archive record and its PDF. The next rclone sync (it runs
+// `rclone sync`, which mirrors deletions) removes it from Drive too — this is
+// permanent, not a trash/recycle bin.
+app.delete('/api/invoices/:id', (req, res) => {
+  const invoices = readJson(INVOICES_FILE) || [];
+  const record = invoices.find(i => i.id === req.params.id);
+  if (!record) return res.status(404).json({ error: 'Invoice not found.' });
+
+  if (record.filename) {
+    try { fs.unlinkSync(path.join(PDF_INVOICES_DIR, record.filename)); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  writeJson(INVOICES_FILE, invoices.filter(i => i.id !== req.params.id));
+  res.json({ ok: true });
 });
 
 // =========================================================
