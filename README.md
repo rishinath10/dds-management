@@ -87,12 +87,97 @@ deploying a change.
 
 ---
 
-## 2. Deploying with Coolify (recommended if you already run Coolify)
+## 2. Deploying with Dokploy (this is what runs ddsmarine.com)
 
-Coolify already gives you a reverse proxy and automatic HTTPS (via Traefik +
-Let's Encrypt), so this is simpler than a manual VPS setup — you don't need
-Nginx, Certbot, or pm2 at all. Two things matter more here than usual:
-**persistent volumes** and **domain**.
+If your Hostinger VPS already runs Dokploy for the main `www.ddsmarine.com`
+site, this app becomes a **second, independent Application** on that same
+Dokploy instance — same server, same Dokploy panel, own container, own
+subdomain. Dokploy's built-in Traefik already terminates HTTPS and routes by
+hostname, so it happily runs both sites side by side; you're not choosing
+between them.
+
+The two things that matter more than anything else here are the same as any
+Docker-based deploy: **persistent volumes** (or a redeploy wipes your staff
+list and PDF archive) and **the domain**. Everything below maps onto whatever
+your Dokploy version calls these screens — the concepts (Domains, Environment,
+Volumes/Mounts) are stable even if a label moved.
+
+**1. Code is already on GitHub and on `main`** — `rishinath10/dds-management`,
+branch `main`, with the `Dockerfile` and `.gitignore` already in place.
+Nothing to push; Dokploy will pull directly from there.
+
+**2. In Dokploy: create a new Application** (in whichever Project makes
+sense — its own, or alongside the main site). Point it at the
+`rishinath10/dds-management` GitHub repo, branch `main`. Dokploy should
+detect the `Dockerfile` automatically as the build method; if it asks, the
+build type is **Dockerfile**, not Nixpacks/buildpacks.
+
+**3. Set the container port to `3300`.** This app listens on port 3300
+(see `Dockerfile`'s `EXPOSE 3300`) — wherever Dokploy asks which port the
+container exposes internally, that's the number. This is separate from the
+public port (443), which Traefik handles.
+
+**4. Environment variables** (the app's Environment/Env Vars tab):
+```
+ADMIN_USER=admin
+ADMIN_PASS=<something strong — this protects staff salary data>
+```
+This is the only login gate on the whole app (HTTP Basic Auth, see
+`server.js`), so don't reuse a weak or shared password here.
+
+**5. Persistent volumes — set this up before the first real deploy, not
+after.** Add two mounts so a redeploy doesn't reset everything:
+```
+Container path: /app/data     →  a named volume, e.g. dds-data
+Container path: /app/pdfs     →  a named volume, e.g. dds-pdfs
+```
+Without this, every redeploy wipes the staff/client lists and clears the
+PDF archive, because Dokploy rebuilds the container fresh on each deploy —
+same underlying reason Coolify needs this (see 2a below).
+
+**6. Domain: add `admin.ddsmarine.com`** in the Application's Domains tab,
+pointed at container port `3300`, with HTTPS/Let's Encrypt enabled. Dokploy's
+Traefik will request the certificate automatically once DNS resolves (next
+step) — no separate Nginx or Certbot needed.
+
+**7. DNS — one new record.** Since `www.ddsmarine.com` already resolves to
+this VPS, you almost certainly just need to add:
+```
+Type: A
+Name: admin
+Value: <this VPS's public IP — the same one www.ddsmarine.com points at>
+```
+wherever `ddsmarine.com`'s DNS is managed (Hostinger's own DNS zone,
+Cloudflare, etc. — check `dig www.ddsmarine.com` if unsure which IP). Skip
+this step entirely if you already have a wildcard `*.ddsmarine.com` record.
+DNS propagation is usually minutes, occasionally longer.
+
+**8. Deploy**, watch the build log, then visit `https://admin.ddsmarine.com`
+— your browser should prompt for the ADMIN_USER/ADMIN_PASS from step 4. If
+it times out instead of prompting, DNS hasn't propagated yet or the domain
+in step 6 doesn't match; if it loads but Traefik can't get a certificate,
+double-check ports 80/443 are open on the VPS (they already are, since your
+main site uses them — this app doesn't need anything extra there).
+
+**Connecting rclone for Drive sync:** the `pdfs/` folder lives inside a
+Docker volume now, not a plain folder, so point rclone at its real location
+on the host. Find it with:
+```bash
+docker volume ls | grep pdfs        # find the actual volume name Dokploy created
+docker volume inspect <that-name>   # look for "Mountpoint" in the output
+```
+Use that `Mountpoint` path (typically something like
+`/var/lib/docker/volumes/<name>/_data`) in the `rclone sync` command and
+cron job from Section 6 below, in place of a path like
+`~/dds-dashboard-app/pdfs`.
+
+---
+
+## 2a. Deploying with Coolify (alternative, if you use Coolify instead)
+
+Coolify is the same idea as Dokploy above — Docker + Traefik, automatic
+HTTPS, Git-based deploys — just a different panel. Use this section instead
+of Section 2 if Coolify is what you actually run.
 
 **1. Push this code to a Git repo.** Coolify deploys from Git. Create a new
 repo (GitHub/GitLab, public or private) and push everything in this folder,
@@ -121,12 +206,14 @@ Container path: /app/pdfs     →  a named volume, e.g. dds-dashboard-pdfs
 Without this, every redeploy resets staff/client lists and clears the PDF
 archive, because Coolify rebuilds the container fresh each time.
 
-**5. Domain.** Since you don't have a domain yet, use the free
-[sslip.io](https://sslip.io) trick: find your Oracle VPS's public IP (say
+**5. Domain.** If you don't have a domain yet, use the free
+[sslip.io](https://sslip.io) trick: find your VPS's public IP (say
 `165.22.10.5`) and enter `165-22-10-5.sslip.io` as the app's domain in
 Coolify. Coolify's built-in Traefik will request a real Let's Encrypt
 certificate for it automatically — no extra setup. You'll then reach the
-dashboard at `https://165-22-10-5.sslip.io`.
+dashboard at `https://165-22-10-5.sslip.io`. If you do have a domain, enter
+the real subdomain instead and add the matching DNS A record (see Section 2,
+step 7, for the same idea).
 
 **6. Deploy.** Click Deploy in Coolify and watch the build log. Once it's
 up, visit the domain from step 5 — your browser should prompt for the
@@ -139,7 +226,7 @@ blocks ports by default regardless of the OS firewall. If the domain
 doesn't load after deploying, check that ports 80 and 443 are allowed as
 ingress rules in your Oracle Cloud console under your VCN's Security List
 — this is the single most common reason a Coolify app doesn't load
-externally on Oracle.
+externally on Oracle. (Not applicable on Hostinger.)
 
 **Connecting rclone for Drive sync:** the `pdfs/` folder now lives inside
 a Docker volume rather than a plain folder, so point rclone at its actual
@@ -152,12 +239,12 @@ Look for `"Mountpoint"` in the output (typically something like
 `/var/lib/docker/volumes/dds-dashboard-pdfs/_data`) and use that path in
 the `rclone sync` command and cron job from Section 6 (rclone) below — same idea, just point it at the Docker volume path instead.
 
-If you'd rather deploy the traditional way (no Coolify) — e.g. on a second
-plain VPS — Section 3 below covers that from scratch.
+If you'd rather deploy the traditional way (no Coolify/Dokploy) — e.g. on a
+second plain VPS — Section 3 below covers that from scratch.
 
 ---
 
-## 3. Manual VPS setup (skip this if using Coolify above)
+## 3. Manual VPS setup (skip this if using Dokploy or Coolify above)
 
 Requires Node.js 18+ (check with `node -v`).
 
