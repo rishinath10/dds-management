@@ -132,8 +132,7 @@ Container path: /app/data     →  a named volume, e.g. dds-data
 Container path: /app/pdfs     →  a named volume, e.g. dds-pdfs
 ```
 Without this, every redeploy wipes the staff/client lists and clears the
-PDF archive, because Dokploy rebuilds the container fresh on each deploy —
-same underlying reason Coolify needs this (see 2a below).
+PDF archive, because Dokploy rebuilds the container fresh on each deploy.
 
 **6. Domain: add `admin.ddsmarine.com`** in the Application's Domains tab,
 pointed at container port `3300`, with HTTPS/Let's Encrypt enabled. Dokploy's
@@ -171,80 +170,12 @@ Use that `Mountpoint` path (typically something like
 cron job from Section 6 below, in place of a path like
 `~/dds-dashboard-app/pdfs`.
 
----
-
-## 2a. Deploying with Coolify (alternative, if you use Coolify instead)
-
-Coolify is the same idea as Dokploy above — Docker + Traefik, automatic
-HTTPS, Git-based deploys — just a different panel. Use this section instead
-of Section 2 if Coolify is what you actually run.
-
-**1. Push this code to a Git repo.** Coolify deploys from Git. Create a new
-repo (GitHub/GitLab, public or private) and push everything in this folder,
-including the `Dockerfile` and `.gitignore` — both are already set up for
-this. `.gitignore` deliberately excludes `data/*.json` and `pdfs/**/*.pdf`
-so no real staff/client data ends up in the repo; the app recreates those
-files with safe defaults on first run.
-
-**2. In Coolify: New Resource → Application → your Git repo.** Coolify
-should detect the `Dockerfile` automatically (Build Pack: Dockerfile). Set
-the exposed port to `3300` in the app's General settings.
-
-**3. Environment variables** (Coolify's "Environment Variables" tab):
-```
-ADMIN_USER=admin
-ADMIN_PASS=<something strong>
-```
-
-**4. Persistent storage — do this before your first real deploy.** In the
-app's "Storages" tab, add two volume mounts so a redeploy doesn't wipe
-everything:
-```
-Container path: /app/data     →  a named volume, e.g. dds-dashboard-data
-Container path: /app/pdfs     →  a named volume, e.g. dds-dashboard-pdfs
-```
-Without this, every redeploy resets staff/client lists and clears the PDF
-archive, because Coolify rebuilds the container fresh each time.
-
-**5. Domain.** If you don't have a domain yet, use the free
-[sslip.io](https://sslip.io) trick: find your VPS's public IP (say
-`165.22.10.5`) and enter `165-22-10-5.sslip.io` as the app's domain in
-Coolify. Coolify's built-in Traefik will request a real Let's Encrypt
-certificate for it automatically — no extra setup. You'll then reach the
-dashboard at `https://165-22-10-5.sslip.io`. If you do have a domain, enter
-the real subdomain instead and add the matching DNS A record (see Section 2,
-step 7, for the same idea).
-
-**6. Deploy.** Click Deploy in Coolify and watch the build log. Once it's
-up, visit the domain from step 5 — your browser should prompt for the
-ADMIN_USER/ADMIN_PASS you set.
-
-**Oracle Cloud gotcha:** Oracle VPS instances have *two* layers of
-firewall — the OS-level one (which Coolify usually configures for you) and
-Oracle's own cloud-level "Security List" / Network Security Group, which
-blocks ports by default regardless of the OS firewall. If the domain
-doesn't load after deploying, check that ports 80 and 443 are allowed as
-ingress rules in your Oracle Cloud console under your VCN's Security List
-— this is the single most common reason a Coolify app doesn't load
-externally on Oracle. (Not applicable on Hostinger.)
-
-**Connecting rclone for Drive sync:** the `pdfs/` folder now lives inside
-a Docker volume rather than a plain folder, so point rclone at its actual
-location on the host instead of a path like `~/dds-dashboard-app/pdfs`.
-Find it with:
-```bash
-docker volume inspect dds-dashboard-pdfs
-```
-Look for `"Mountpoint"` in the output (typically something like
-`/var/lib/docker/volumes/dds-dashboard-pdfs/_data`) and use that path in
-the `rclone sync` command and cron job from Section 6 (rclone) below — same idea, just point it at the Docker volume path instead.
-
-If you'd rather deploy the traditional way (no Coolify/Dokploy) — e.g. on a
-second plain VPS — Section 3 below covers that from scratch.
+If you'd rather deploy the traditional way (no Dokploy) — e.g. on a second
+plain VPS — Section 3 below covers that from scratch.
 
 ---
 
-## 3. Manual VPS setup (skip this if using Dokploy or Coolify above)
+## 3. Manual VPS setup (skip this if using Dokploy above)
 
 Requires Node.js 18+ (check with `node -v`).
 
