@@ -38,30 +38,35 @@ ensureFile(COMPANY_FILE, {
 });
 ensureFile(PAYSLIPS_FILE, []);
 ensureFile(CLIENTS_FILE, []);
-// Seeded from the actual Invoice_73.pdf template Rishi uploaded — real data, not placeholders.
+// Blank on purpose — this file only ships as a template. Real company/bank
+// details belong solely in data/invoice_settings.json (gitignored, lives only
+// on the server), entered once via the Invoice Header & Bank Details screen.
+// An earlier version of this file hardcoded the real DDS Marine bank account,
+// SWIFT code, phone number and two personal emails here as "seed data" — that
+// put real financial and contact details in git history on a public repo.
 ensureFile(INVOICE_SETTINGS_FILE, {
-  companyName: 'DDS MARINE ENERGY SERVICES SDN BHD',
-  headerAddressLine1: 'Level 5, Straits Quay Office Block, Jalan Seri Tg Pinang, 10470',
-  headerAddressLine2: 'Tanjung Tokong, Penang',
-  headerAddressLine3: 'Penang Penang 10470',
-  headerCountry: 'MY',
-  tradingEmail: 'trading@ddsgroup.info',
-  regLine: '202401006820 : (1552670-D)',
-  payCompanyName: 'DDS MARINE ENERGY SERVICES SDN.BHD',
-  payRegNo: '(1552670-D)',
-  payAddressLine1: '29, Denai Endau 9, Seri Tanjung Pinang',
-  payAddressLine2: '10470 Tanjung Tokong,',
-  payAddressLine3: 'Pulau Pinang,Malaysia',
-  payContact: '+60165063003',
-  payMail: 'captdinesh@ddsgroup.info',
-  bankName: 'UOB BANK BERHAD',
-  bankSwift: 'UOVBMYKL',
-  bankMyrAcct: '265-312-169-7 ( Follow bank exchange rate of the day )',
-  bankUsdAcct: '265-905-233-6',
-  bankBranchAddress: '9, Jalan Kelawai, Kampung Syed, 10250 George Town, Pulau Pinang',
-  bankOfficerNo: '+60164143457',
-  bankOfficerName: 'Vyronice',
-  bankOfficerMail: 'hueysy.kong@uob.com.my'
+  companyName: '',
+  headerAddressLine1: '',
+  headerAddressLine2: '',
+  headerAddressLine3: '',
+  headerCountry: '',
+  tradingEmail: '',
+  regLine: '',
+  payCompanyName: '',
+  payRegNo: '',
+  payAddressLine1: '',
+  payAddressLine2: '',
+  payAddressLine3: '',
+  payContact: '',
+  payMail: '',
+  bankName: '',
+  bankSwift: '',
+  bankMyrAcct: '',
+  bankUsdAcct: '',
+  bankBranchAddress: '',
+  bankOfficerNo: '',
+  bankOfficerName: '',
+  bankOfficerMail: ''
 });
 ensureFile(INVOICES_FILE, []);
 
