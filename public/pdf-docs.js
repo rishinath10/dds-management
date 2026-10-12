@@ -41,13 +41,13 @@
 
   // ---------------------------------------------------------------- helpers
 
-  function money(n) {
+  function money(n, currency) {
     var v = Number(n) || 0;
     var s = Math.abs(v).toFixed(2);
     var parts = s.split('.');
     // Thousands separators, without relying on locale support in the PDF.
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return (v < 0 ? '-' : '') + 'RM ' + parts.join('.');
+    return (v < 0 ? '-' : '') + (currency === 'USD' ? 'USD ' : 'RM ') + parts.join('.');
   }
 
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -516,9 +516,9 @@
         pdf.text(lines[i], xDesc + 3, y + 5 + i * 4);
       }
       pdf.text(String(it.qty == null ? '' : it.qty), xQty + colQty - 3, y + 5, { align: 'right' });
-      pdf.text(money(it.price), xPrice + colPrice - 3, y + 5, { align: 'right' });
-      pdf.text(it.discount ? money(it.discount) : '', xDisc + colDisc - 3, y + 5, { align: 'right' });
-      pdf.text(money(it.amount), xAmt + colAmt - 3, y + 5, { align: 'right' });
+      pdf.text(money(it.price, inv.currency), xPrice + colPrice - 3, y + 5, { align: 'right' });
+      pdf.text(it.discount ? money(it.discount, inv.currency) : '', xDisc + colDisc - 3, y + 5, { align: 'right' });
+      pdf.text(money(it.amount, inv.currency), xAmt + colAmt - 3, y + 5, { align: 'right' });
 
       hLine(pdf, MARGIN, y + rowH, PAGE_W - MARGIN, LINE, 0.15);
       y += rowH;
@@ -533,13 +533,13 @@
     setFont(pdf, 'normal', 8, MUTED);
     pdf.text('Subtotal', totalsX, y);
     setFont(pdf, 'bold', 8, INK);
-    pdf.text(money(inv.subtotal == null ? inv.total : inv.subtotal), PAGE_W - MARGIN, y, { align: 'right' });
+    pdf.text(money(inv.subtotal == null ? inv.total : inv.subtotal, inv.currency), PAGE_W - MARGIN, y, { align: 'right' });
     y += 3;
     hLine(pdf, totalsX, y, PAGE_W - MARGIN, LINE, 0.15);
     y += 4.5;
     setFont(pdf, 'bold', 9, NAVY);
     pdf.text('Total', totalsX, y);
-    pdf.text(money(inv.total), PAGE_W - MARGIN, y, { align: 'right' });
+    pdf.text(money(inv.total, inv.currency), PAGE_W - MARGIN, y, { align: 'right' });
     y += 8;
 
     // ---- amount due ----------------------------------------------------
@@ -550,7 +550,7 @@
     setFont(pdf, 'bold', 9, NAVY);
     pdf.text('AMOUNT DUE', MARGIN + 5, y + dueH / 2 + 1.2);
     setFont(pdf, 'bold', 18, NAVY);
-    pdf.text(money(inv.total), PAGE_W - MARGIN - 5, y + dueH / 2 + 2.2, { align: 'right' });
+    pdf.text(money(inv.total, inv.currency), PAGE_W - MARGIN - 5, y + dueH / 2 + 2.2, { align: 'right' });
     y += dueH + 7;
 
     // ---- notes ---------------------------------------------------------
@@ -683,7 +683,7 @@
     setFont(pdf, 'bold', 7.5, NAVY);
     pdf.text('AMOUNT RECEIVED', MARGIN + 5, y + 6.5);
     setFont(pdf, 'bold', 18, NAVY);
-    pdf.text(money(r.amount), PAGE_W - MARGIN - 5, y + 14.5, { align: 'right' });
+    pdf.text(money(r.amount, r.currency), PAGE_W - MARGIN - 5, y + 14.5, { align: 'right' });
     y += amtH + 10;
 
     // ---- being payment for -----------------------------------------------

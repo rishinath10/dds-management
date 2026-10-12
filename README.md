@@ -364,7 +364,13 @@ income tax is **not** calculated.
 
 **Invoices** — no SST applied (Total = Subtotal); Amount Due always equals
 Total since payment status isn't tracked here (track that separately).
-Currency is MYR throughout.
+
+**Currency** — invoices and receipts are MYR by default; pick USD on the
+invoice or receipt form for foreign clients paying into the USD account, and
+the PDF and Archive show "USD" instead of "RM". The dashboard's invoiced
+totals only count MYR invoices (USD is reported separately as
+`invoicedTotalUSD` by `/api/stats`), so the two are never added together.
+There's no currency conversion. Payslips are always MYR.
 
 **Receipts** — the category is a bookkeeping tag only; it doesn't update any
 invoice's payment status or mark it as paid. Linking a receipt to an invoice

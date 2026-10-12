@@ -119,7 +119,7 @@
   "use strict";
 
   const $ = id => document.getElementById(id);
-  const rm = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const rm = (n, currency) => (currency === 'USD' ? 'USD ' : 'RM ') + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2});
   const escapeHtml = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   let view = 'payslips';
@@ -226,7 +226,7 @@
           ${i.items && i.items.length ? `<div class="secondary">${i.items.length} line item${i.items.length===1?'':'s'}</div>` : ''}
         </td>
         <td>${escapeHtml(dateLabel(i.date || i.savedAt))}</td>
-        <td class="num"><strong>${rm(i.total)}</strong></td>
+        <td class="num"><strong>${rm(i.total, i.currency)}</strong></td>
         <td>${escapeHtml(savedLabel(i.savedAt))}</td>
         <td class="actions">
           <a class="link-btn" href="/api/invoices/${encodeURIComponent(i.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
@@ -254,7 +254,7 @@
           <span class="cat-chip cat-${escapeHtml(r.category || 'Other')}">${badge}</span>
         </td>
         <td>${escapeHtml(dateLabel(r.date || r.savedAt))}</td>
-        <td class="num"><strong>${rm(r.amount)}</strong></td>
+        <td class="num"><strong>${rm(r.amount, r.currency)}</strong></td>
         <td>${escapeHtml(savedLabel(r.savedAt))}</td>
         <td class="actions">
           <a class="link-btn" href="/api/receipts/${encodeURIComponent(r.id)}/pdf" target="_blank" rel="noopener">View PDF</a>

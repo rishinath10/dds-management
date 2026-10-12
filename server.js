@@ -114,6 +114,12 @@ backfillIds(RECEIPTS_FILE, 'rcpt_');
 // for, so they never get an Invoice.
 const RECEIPT_CATEGORIES = ['Invoice', 'Capital', 'Refund', 'Other'];
 
+// Invoices and receipts are MYR unless marked USD (DDS holds a USD account
+// for foreign charter clients). Records saved before this existed have no
+// currency field and are MYR.
+const CURRENCIES = ['MYR', 'USD'];
+const currencyOf = rec => (rec && rec.currency === 'USD' ? 'USD' : 'MYR');
+
 // Resolve an archived record's PDF and stream it back. The filename always
 // comes from our own stored record, never from the URL, and the resolved path
 // is re-checked against the archive directory before anything is read.
@@ -355,9 +361,12 @@ app.get('/api/invoices/next-number', (req, res) => {
 // ---- Invoice PDF archive ----
 app.post('/api/invoices', (req, res) => {
   const { invoiceNumber, clientId, clientName, total, pdfBase64,
-          date, dueDate, notes, subtotal, items } = req.body || {};
+          date, dueDate, notes, subtotal, items, currency } = req.body || {};
   if (!pdfBase64 || !invoiceNumber) {
     return res.status(400).json({ error: 'invoiceNumber and pdfBase64 are required.' });
+  }
+  if (currency && !CURRENCIES.includes(currency)) {
+    return res.status(400).json({ error: 'currency must be one of: ' + CURRENCIES.join(', ') });
   }
 
   const filename = `Invoice_${safeSegment(invoiceNumber, 'unnumbered')}.pdf`;
@@ -381,6 +390,7 @@ app.post('/api/invoices', (req, res) => {
     invoiceNumber,
     clientId,
     clientName,
+    currency: currency || 'MYR',
     total,
     subtotal: subtotal != null ? subtotal : total,
     date: date || '',
@@ -447,12 +457,15 @@ app.get('/api/receipts/next-number', (req, res) => {
 
 app.post('/api/receipts', (req, res) => {
   const { receiptNumber, date, payerName, amount, category, bankRef, remarks,
-          linkedInvoiceId, linkedInvoiceNumber, pdfBase64 } = req.body || {};
+          linkedInvoiceId, linkedInvoiceNumber, pdfBase64, currency } = req.body || {};
   if (!pdfBase64 || !receiptNumber || !payerName) {
     return res.status(400).json({ error: 'receiptNumber, payerName and pdfBase64 are required.' });
   }
   if (category && !RECEIPT_CATEGORIES.includes(category)) {
     return res.status(400).json({ error: 'category must be one of: ' + RECEIPT_CATEGORIES.join(', ') });
+  }
+  if (currency && !CURRENCIES.includes(currency)) {
+    return res.status(400).json({ error: 'currency must be one of: ' + CURRENCIES.join(', ') });
   }
 
   const filename = `Receipt_${safeSegment(receiptNumber, 'unnumbered')}.pdf`;
@@ -474,6 +487,7 @@ app.post('/api/receipts', (req, res) => {
     receiptNumber,
     date: date || '',
     payerName,
+    currency: currency || 'MYR',
     amount,
     category: category || 'Other',
     bankRef: bankRef || '',
@@ -534,9 +548,10 @@ app.get('/api/stats', (req, res) => {
   const invoices = readJson(INVOICES_FILE) || [];
   const receipts = readJson(RECEIPTS_FILE) || [];
   const thisMonth = new Date().toISOString().slice(0, 7);
-  const invoicedThisMonth = invoices
-    .filter(i => String(i.date || i.savedAt || '').slice(0, 7) === thisMonth)
-    .reduce((sum, i) => sum + (Number(i.total) || 0), 0);
+  const sumTotals = list => Math.round(list.reduce((s, i) => s + (Number(i.total) || 0), 0) * 100) / 100;
+  const myrInvoices = invoices.filter(i => currencyOf(i) === 'MYR');
+  const invoicedThisMonth = sumTotals(myrInvoices
+    .filter(i => String(i.date || i.savedAt || '').slice(0, 7) === thisMonth));
 
   res.json({
     employees: (readJson(EMP_FILE) || []).length,
@@ -545,8 +560,9 @@ app.get('/api/stats', (req, res) => {
     invoices: invoices.length,
     receipts: receipts.length,
     payslipsThisMonth: payslips.filter(p => p.payMonth === thisMonth).length,
-    invoicedThisMonth: Math.round(invoicedThisMonth * 100) / 100,
-    invoicedTotal: Math.round(invoices.reduce((s, i) => s + (Number(i.total) || 0), 0) * 100) / 100,
+    invoicedThisMonth,
+    invoicedTotal: sumTotals(myrInvoices),
+    invoicedTotalUSD: sumTotals(invoices.filter(i => currencyOf(i) === 'USD')),
     lastPayslipAt: payslips.length ? payslips[payslips.length - 1].savedAt : null,
     lastInvoiceAt: invoices.length ? invoices[invoices.length - 1].savedAt : null
   });

@@ -408,6 +408,46 @@ test('deleting a receipt whose PDF is already missing from disk still succeeds',
   assert.strictEqual(del.status, 200, 'a missing file on disk should not block deleting the record');
 });
 
+// ---------------------------------------------------------------- currency
+
+test('invoices and receipts store their currency, defaulting to MYR', async () => {
+  const usdInv = await (await postJson('/api/invoices', {
+    invoiceNumber: 'USD-1', clientName: 'Dexi Shipping Limited', total: 1000, currency: 'USD', pdfBase64: PDF_DATA_URI
+  })).json();
+  assert.strictEqual((await (await api('/api/invoices/' + usdInv.id)).json()).currency, 'USD');
+
+  const myrInv = await (await postJson('/api/invoices', {
+    invoiceNumber: 'MYR-1', clientName: 'Someone', total: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  assert.strictEqual((await (await api('/api/invoices/' + myrInv.id)).json()).currency, 'MYR');
+
+  const usdRcpt = await (await postJson('/api/receipts', {
+    receiptNumber: 'USD-R1', payerName: 'Dexi Shipping Limited', amount: 1000, currency: 'USD', pdfBase64: PDF_DATA_URI
+  })).json();
+  assert.strictEqual((await (await api('/api/receipts/' + usdRcpt.id)).json()).currency, 'USD');
+});
+
+test('rejects an unknown currency', async () => {
+  const inv = await postJson('/api/invoices', {
+    invoiceNumber: 'EUR-1', total: 1, currency: 'EUR', pdfBase64: PDF_DATA_URI
+  });
+  assert.strictEqual(inv.status, 400);
+  const rcpt = await postJson('/api/receipts', {
+    receiptNumber: 'EUR-R1', payerName: 'X', amount: 1, currency: 'EUR', pdfBase64: PDF_DATA_URI
+  });
+  assert.strictEqual(rcpt.status, 400);
+});
+
+test('USD invoices are totalled separately, not added into the RM total', async () => {
+  const before = await (await api('/api/stats')).json();
+  await postJson('/api/invoices', {
+    invoiceNumber: 'USD-2', clientName: 'Dexi Shipping Limited', total: 5000, currency: 'USD', pdfBase64: PDF_DATA_URI
+  });
+  const after = await (await api('/api/stats')).json();
+  assert.strictEqual(after.invoicedTotal, before.invoicedTotal);
+  assert.strictEqual(after.invoicedTotalUSD, before.invoicedTotalUSD + 5000);
+});
+
 // ---------------------------------------------------------------- body limits
 
 // Archiving used to fail silently because generated PDFs exceeded the body
