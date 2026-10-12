@@ -17,7 +17,8 @@
   .topbar h1{font-size:19px;margin:0;font-weight:600;}
   .topbar p{margin:0;font-size:12.5px;color:var(--gold-light);}
   .wrap{max-width:960px;margin:0 auto;padding:48px 24px;}
-  .cards{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:8px;}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:8px;}
+  @media (max-width:860px){.cards{grid-template-columns:1fr 1fr;}}
   @media (max-width:640px){.cards{grid-template-columns:1fr;}}
   a.card{
     display:block;background:#fff;border:1px solid var(--line);border-radius:14px;
@@ -29,7 +30,8 @@
   a.card h2{font-size:19px;margin:0 0 6px 0;color:var(--navy);}
   a.card p{font-size:13.5px;color:var(--muted);margin:0;line-height:1.5;}
   a.card .go{margin-top:14px;font-size:12.5px;font-weight:700;color:var(--gold);letter-spacing:.03em;}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:26px;}
+  @media (max-width:860px){.stats{grid-template-columns:repeat(3,1fr);}}
   @media (max-width:640px){.stats{grid-template-columns:1fr 1fr;}}
   .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
   .stat .v{font-size:24px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;line-height:1.15;}
@@ -49,7 +51,7 @@
     <img src="/assets/dds-logo-mark.png" alt="DDS">
     <div>
       <h1>DDS Marine — Dashboard</h1>
-      <p>Payslips &amp; Invoices, all with DDS branding, archived automatically</p>
+      <p>Payslips, Invoices &amp; Receipts, all with DDS branding, archived automatically</p>
     </div>
   </div>
 
@@ -59,6 +61,7 @@
       <div class="stat"><div class="v" id="statClients">—</div><div class="k">Clients</div></div>
       <div class="stat"><div class="v" id="statPayslips">—</div><div class="k">Payslips archived</div><div class="sub" id="statPayslipsMonth"></div></div>
       <div class="stat"><div class="v" id="statInvoices">—</div><div class="k">Invoices archived</div><div class="sub" id="statInvoicedMonth"></div></div>
+      <div class="stat"><div class="v" id="statReceipts">—</div><div class="k">Receipts archived</div></div>
     </div>
 
     <div class="cards">
@@ -73,6 +76,12 @@
         <h2>Invoices</h2>
         <p>Create client invoices matching your existing DDS invoice format. Saved client directory, one click to PDF.</p>
         <div class="go">Open Invoices →</div>
+      </a>
+      <a class="card" href="/receipt.html">
+        <span class="icon">🧾</span>
+        <h2>Receipts</h2>
+        <p>Official receipts for money received — invoice payments, capital injections, or refunds. One click to PDF.</p>
+        <div class="go">Open Receipts →</div>
       </a>
     </div>
 
@@ -96,6 +105,7 @@
       $('statClients').textContent = s.clients;
       $('statPayslips').textContent = s.payslips;
       $('statInvoices').textContent = s.invoices;
+      $('statReceipts').textContent = s.receipts;
       if(s.payslipsThisMonth) $('statPayslipsMonth').textContent = s.payslipsThisMonth + ' this month';
       if(s.invoicedThisMonth) $('statInvoicedMonth').textContent = rm(s.invoicedThisMonth) + ' this month';
     })

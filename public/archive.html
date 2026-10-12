@@ -67,6 +67,12 @@
   .link-btn.danger{border-color:var(--danger);color:var(--danger);}
   .link-btn.danger:hover{background:#fdf0ef;}
 
+  .cat-chip{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:20px;text-transform:uppercase;}
+  .cat-Invoice{background:rgba(200,151,63,.15);color:#8a6420;}
+  .cat-Capital{background:rgba(90,110,170,.15);color:#5a6eaa;}
+  .cat-Refund{background:rgba(170,90,70,.15);color:#aa5a46;}
+  .cat-Other{background:rgba(107,114,128,.15);color:var(--muted);}
+
   .empty-state{text-align:center;padding:56px 20px;color:var(--muted);}
   .empty-state .big-icon{font-size:38px;margin-bottom:10px;}
   .empty-state p{margin:0 0 4px 0;font-size:14px;}
@@ -95,6 +101,7 @@
   <div class="tabs">
     <button class="tab active" id="tabPayslips" data-view="payslips">Payslips <span class="count" id="countPayslips">0</span></button>
     <button class="tab" id="tabInvoices" data-view="invoices">Invoices <span class="count" id="countInvoices">0</span></button>
+    <button class="tab" id="tabReceipts" data-view="receipts">Receipts <span class="count" id="countReceipts">0</span></button>
   </div>
 
   <div class="toolbar">
@@ -118,6 +125,7 @@
   let view = 'payslips';
   let payslips = [];
   let invoices = [];
+  let receipts = [];
 
   async function apiGet(url){
     const r = await fetch(url);
@@ -154,9 +162,10 @@
 
   async function load(){
     try{
-      [payslips, invoices] = await Promise.all([
+      [payslips, invoices, receipts] = await Promise.all([
         apiGet('/api/payslips'),
-        apiGet('/api/invoices')
+        apiGet('/api/invoices'),
+        apiGet('/api/receipts')
       ]);
     }catch(e){
       console.error(e);
@@ -166,8 +175,10 @@
     }
     payslips = payslips.slice().sort(byNewest);
     invoices = invoices.slice().sort(byNewest);
+    receipts = receipts.slice().sort(byNewest);
     $('countPayslips').textContent = payslips.length;
     $('countInvoices').textContent = invoices.length;
+    $('countReceipts').textContent = receipts.length;
     render();
   }
 
@@ -175,7 +186,9 @@
     if(!term) return true;
     const haystack = view === 'payslips'
       ? [record.employeeName, record.payMonth, monthLabel(record.payMonth), record.filename]
-      : [record.invoiceNumber, record.clientName, record.filename, record.notes];
+      : view === 'invoices'
+      ? [record.invoiceNumber, record.clientName, record.filename, record.notes]
+      : [record.receiptNumber, record.payerName, record.category, record.linkedInvoiceNumber, record.bankRef, record.remarks, record.filename];
     return haystack.filter(Boolean).join(' ').toLowerCase().includes(term);
   }
 
@@ -225,9 +238,35 @@
       </tr>`).join('');
   }
 
+  function renderReceiptRows(rows){
+    return rows.map(r => {
+      const badge = r.category === 'Invoice' && r.linkedInvoiceNumber
+        ? `Invoice #${escapeHtml(r.linkedInvoiceNumber)}`
+        : escapeHtml(r.category || 'Other');
+      return `
+      <tr>
+        <td>
+          <div class="primary">#${escapeHtml(r.receiptNumber)}</div>
+          <div class="secondary">${escapeHtml(r.filename || '')}</div>
+        </td>
+        <td>
+          <div>${escapeHtml(r.payerName || '—')}</div>
+          <span class="cat-chip cat-${escapeHtml(r.category || 'Other')}">${badge}</span>
+        </td>
+        <td>${escapeHtml(dateLabel(r.date || r.savedAt))}</td>
+        <td class="num"><strong>${rm(r.amount)}</strong></td>
+        <td>${escapeHtml(savedLabel(r.savedAt))}</td>
+        <td class="actions">
+          <a class="link-btn" href="/api/receipts/${encodeURIComponent(r.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+          <button class="link-btn danger" data-delete="receipts" data-id="${escapeHtml(r.id)}" data-label="${escapeHtml('Receipt #' + r.receiptNumber + ' — ' + (r.payerName||''))}">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
   function render(){
     const term = $('searchBox').value.trim().toLowerCase();
-    const source = view === 'payslips' ? payslips : invoices;
+    const source = view === 'payslips' ? payslips : view === 'invoices' ? invoices : receipts;
     const rows = source.filter(r => matches(r, term));
 
     $('tally').textContent = term
@@ -235,11 +274,13 @@
       : `${source.length} archived`;
 
     if(!source.length){
+      const icon = view === 'payslips' ? '🧾' : view === 'invoices' ? '📄' : '🧾';
+      const noun = view === 'payslips' ? 'payslip' : view === 'invoices' ? 'invoice' : 'receipt';
       $('panel').innerHTML = `
         <div class="empty-state">
-          <div class="big-icon">${view === 'payslips' ? '🧾' : '📄'}</div>
+          <div class="big-icon">${icon}</div>
           <p>Nothing archived yet.</p>
-          <div class="hint">Generate a ${view === 'payslips' ? 'payslip' : 'invoice'} and click
+          <div class="hint">Generate a ${noun} and click
             “Save to Archive” — it will appear here and sync to Drive.</div>
         </div>`;
       return;
@@ -253,10 +294,12 @@
 
     const head = view === 'payslips'
       ? `<tr><th>Employee</th><th>Pay period</th><th class="num">Gross</th><th class="num">Net pay</th><th>Archived</th><th></th></tr>`
-      : `<tr><th>Invoice</th><th>Client</th><th>Date</th><th class="num">Total</th><th>Archived</th><th></th></tr>`;
+      : view === 'invoices'
+      ? `<tr><th>Invoice</th><th>Client</th><th>Date</th><th class="num">Total</th><th>Archived</th><th></th></tr>`
+      : `<tr><th>Receipt</th><th>Received From</th><th>Date</th><th class="num">Amount</th><th>Archived</th><th></th></tr>`;
 
     $('panel').innerHTML = `<table class="list"><thead>${head}</thead><tbody>${
-      view === 'payslips' ? renderPayslipRows(rows) : renderInvoiceRows(rows)
+      view === 'payslips' ? renderPayslipRows(rows) : view === 'invoices' ? renderInvoiceRows(rows) : renderReceiptRows(rows)
     }</tbody></table>`;
   }
 
@@ -284,9 +327,11 @@
     try{
       await apiDelete(`/api/${kind}/${encodeURIComponent(id)}`);
       if(kind === 'payslips') payslips = payslips.filter(p => p.id !== id);
-      else invoices = invoices.filter(i => i.id !== id);
+      else if(kind === 'invoices') invoices = invoices.filter(i => i.id !== id);
+      else receipts = receipts.filter(r => r.id !== id);
       $('countPayslips').textContent = payslips.length;
       $('countInvoices').textContent = invoices.length;
+      $('countReceipts').textContent = receipts.length;
       render();
     }catch(err){
       console.error(err);

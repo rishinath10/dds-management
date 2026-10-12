@@ -1,8 +1,9 @@
 # DDS Marine — Dashboard (self-hosted)
 
-A small Node/Express app with three modules — **Payslips**, **Invoices** and
-**Archive** — all with DDS branding, all downloadable as PDF, all archived to
-Google Drive via `rclone`. Staff and client data live in JSON files on your VPS.
+A small Node/Express app with four modules — **Payslips**, **Invoices**,
+**Receipts** and **Archive** — all with DDS branding, all downloadable as
+PDF, all archived to Google Drive via `rclone`. Staff and client data live in
+JSON files on your VPS.
 
 ---
 
@@ -16,8 +17,9 @@ public/
   index.html              Dashboard home (live counts + links to each module)
   payslip.html             Payslip generator (staff, EPF/SOCSO/EIS calc)
   invoice.html             Invoice generator (clients, line items)
+  receipt.html             Official Receipt generator (money received)
   archive.html             Browse/search everything archived, reopen PDFs
-  pdf-docs.js              Draws the payslip + invoice as vector PDFs
+  pdf-docs.js              Draws the payslip + invoice + receipt as vector PDFs
   assets/dds-logo.png       Full logo + tagline (used on invoices)
   assets/dds-logo-mark.png  Diamond mark only (used in small circular badges)
   vendor/                   jsPDF, vendored (see vendor/README.md)
@@ -26,18 +28,21 @@ scripts/
   trace-logo.js            Regenerates the vector logo from the artwork
   dds-logo-mark.png        The DDS logo artwork the vector mark is traced from
 data/                     employees.json, clients.json, company.json,
-                           invoice_settings.json, payslips.json, invoices.json
+                           invoice_settings.json, payslips.json, invoices.json,
+                           receipts.json
                            (all auto-created on first run)
 pdfs/
   payslips/                Generated payslip PDFs land here
   invoices/                 Generated invoice PDFs land here
+  receipts/                 Generated receipt PDFs land here
                            — this whole pdfs/ tree is what rclone syncs to Drive
 ```
 
-**Where PDFs are stored:** clicking "Save to Archive" on either a payslip or
-an invoice uploads the generated PDF to the server, which writes it to
-`pdfs/payslips/` or `pdfs/invoices/` respectively. "Download PDF" is separate
-— that one only saves to your own device and never touches the server.
+**Where PDFs are stored:** clicking "Save to Archive" on a payslip, invoice or
+receipt uploads the generated PDF to the server, which writes it to
+`pdfs/payslips/`, `pdfs/invoices/` or `pdfs/receipts/` respectively.
+"Download PDF" is separate — that one only saves to your own device and
+never touches the server.
 
 That `pdfs/` folder lives on whatever disk the server runs on — under a
 Dokploy or Coolify-style deploy, that means inside the Docker volume you
@@ -57,17 +62,19 @@ recolour the logo — without it turning into a blurry image. Files are around
 12-15 KB each.
 
 **Browsing what you've archived:** the **Archive** page (`/archive.html`, also
-linked from the dashboard) lists every payslip and invoice that was saved,
-newest first, with a search box. "View PDF" opens the server's own copy —
-the same file rclone syncs to Drive, if rclone is set up. Each payslip row
-shows its gross and net pay, and each invoice row can be **duplicated**: that
+linked from the dashboard) has a tab each for Payslips, Invoices and
+Receipts, newest first, with a search box. "View PDF" opens the server's own
+copy — the same file rclone syncs to Drive, if rclone is set up. Each payslip
+row shows its gross and net pay, each invoice row can be **duplicated** (that
 reopens the invoice page with the same client, line items and notes
-pre-filled under a fresh invoice number, which saves retyping recurring jobs.
+pre-filled under a fresh invoice number, which saves retyping recurring
+jobs), and each receipt row shows its category badge and, for receipts linked
+to an invoice, which invoice number.
 
-**Deleting an archived payslip or invoice:** each row in the Archive page has
-a **Delete** button. This is permanent — it removes the PDF from the server
-immediately, and confirms as much before you click through. If rclone is
-running, the next sync (every 5 minutes, per the cron job in Section 6)
+**Deleting an archived payslip, invoice or receipt:** each row in the Archive
+page has a **Delete** button. This is permanent — it removes the PDF from the
+server immediately, and confirms as much before you click through. If rclone
+is running, the next sync (every 5 minutes, per the cron job in Section 6)
 mirrors that deletion to Google Drive too, since `rclone sync` makes the
 Drive folder match the server's exactly. There's no undo and no recycle bin —
 if you need to keep a record but stop it cluttering the list, don't delete it.
@@ -82,6 +89,23 @@ when that happens.
 number seen so far + 1), but it's just a suggestion — fully editable, so
 skipping numbers (e.g. going from 73 to 80 because other invoices exist
 outside this tool) works fine.
+
+**Receipts** (`/receipt.html`) acknowledge money received — not every
+inflow is trade income, so each receipt is tagged with a **category**:
+
+- **Invoice** — a real payment against a client invoice. Optionally link it
+  to an existing archived Invoice record (the "Linked Invoice" dropdown); the
+  PDF then shows "Invoice Payment — Invoice #N" instead of a generic badge.
+- **Capital** — a director/shareholder injection, not trade income.
+- **Refund** — money returned to the company (e.g. an overpayment refunded
+  by a client or supplier).
+- **Other** — anything that doesn't fit the above.
+
+The category drives a colour-coded badge on the PDF and in the Archive, so
+it's easy to tell real trade income apart from capital injections or refunds
+at a glance — which matters for bookkeeping/audit, since only Invoice-category
+receipts represent revenue. Receipt numbering works the same way invoice
+numbering does (suggested next number, fully editable).
 
 **Removing staff or clients:** open the profile ("Edit staff profile" /
 "Edit client") and use the delete link at the bottom of the form. Anything
@@ -207,7 +231,7 @@ node server.js    # quick test — visit http://your-vps-ip:3300
 ```
 
 You should see a login prompt from your browser (HTTP Basic Auth) before the
-dashboard loads — one login protects both Payslips and Invoices. If you don't
+dashboard loads — one login protects the whole app. If you don't
 set ADMIN_USER/ADMIN_PASS in `.env`, the server starts anyway but prints a
 warning — **don't leave it exposed like that.**
 
@@ -342,6 +366,11 @@ income tax is **not** calculated.
 Total since payment status isn't tracked here (track that separately).
 Currency is MYR throughout.
 
+**Receipts** — the category is a bookkeeping tag only; it doesn't update any
+invoice's payment status or mark it as paid. Linking a receipt to an invoice
+(Invoice category) is for cross-reference in the Archive, not reconciliation
+— the invoice record itself is unchanged.
+
 ---
 
 ## 9. Day-to-day use
@@ -360,8 +389,13 @@ copy in Drive).
 a past invoice. Everything except the invoice number and dates comes across,
 so a repeat job for the same vessel is a couple of clicks.
 
+**Receipts:** Dashboard → Receipts → fill in who paid, how much, and the
+category (Invoice / Capital / Refund / Other) → if it's an Invoice-category
+receipt, optionally pick the matching invoice from the dropdown → Generate →
+Download (to send) → Save to Archive (to keep a copy in Drive).
+
 **Finding an old document:** Dashboard → Archive, then search by staff name,
-month, client, or invoice number.
+month, client, invoice number, payer name or receipt category.
 
 All modules share one login and one Drive sync — nothing extra to set up
 per module.
@@ -370,21 +404,22 @@ per module.
 
 ## 10. Notes for whoever maintains this
 
-**No internet needed to make a PDF.** `html2canvas` and `jsPDF` are vendored
-in `public/vendor/` rather than loaded from a CDN, so PDF generation keeps
-working if the office connection drops. See `public/vendor/README.md` before
-changing their versions — they control what the printed document looks like.
+**No internet needed to make a PDF.** `jsPDF` is vendored in `public/vendor/`
+rather than loaded from a CDN, so PDF generation keeps working if the office
+connection drops. See `public/vendor/README.md` before changing its version
+— it controls what the printed document looks like.
 
-**PDFs are true vector, and editable.** `public/pdf-docs.js` draws the payslip
-and the invoice with jsPDF's native primitives — real text, real lines, real
-filled shapes — so the exported file opens in Adobe Illustrator or any PDF
-editor with every element individually selectable and editable, and the text
-is searchable and copyable. Files come out around 12-15 KB.
+**PDFs are true vector, and editable.** `public/pdf-docs.js` draws the
+payslip, invoice and receipt with jsPDF's native primitives — real text, real
+lines, real filled shapes — so the exported file opens in Adobe Illustrator
+or any PDF editor with every element individually selectable and editable,
+and the text is searchable and copyable. Files come out around 12-15 KB.
 
 The catch to know about: **the on-screen preview and the PDF are two separate
 layouts of the same document.** The preview is the HTML in `payslip.html` /
-`invoice.html`; the PDF is the drawing code in `pdf-docs.js`. They're built to
-match, but changing one does not change the other — edit both, then
+`invoice.html` / `receipt.html`; the PDF is the drawing code in
+`pdf-docs.js` (`buildPayslip` / `buildInvoice` / `buildReceipt`). They're
+built to match, but changing one does not change the other — edit both, then
 regenerate a document and compare.
 
 Fonts are jsPDF's built-in Helvetica, one of the 14 standard PDF fonts, so

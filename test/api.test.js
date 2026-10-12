@@ -292,6 +292,122 @@ test('deleting a record whose PDF is already missing from disk still succeeds', 
   assert.strictEqual(del.status, 200, 'a missing file on disk should not block deleting the record');
 });
 
+// ---------------------------------------------------------------- receipts
+
+test('suggests the next receipt number from the highest seen', async () => {
+  await postJson('/api/receipts', {
+    receiptNumber: '5', payerName: 'MEG Synergy', amount: 1000, pdfBase64: PDF_DATA_URI
+  });
+
+  const { next } = await (await api('/api/receipts/next-number')).json();
+  assert.ok(next >= 6, 'next-number must not be shadowed by the /:id route');
+});
+
+test('archives a receipt and serves the PDF back intact', async () => {
+  const saved = await (await postJson('/api/receipts', {
+    receiptNumber: '10',
+    date: '2026-08-01',
+    payerName: 'Dexi Shipping Limited',
+    amount: 8520.5,
+    category: 'Invoice',
+    bankRef: 'MBB',
+    remarks: 'Payment received against Invoice 9.',
+    linkedInvoiceNumber: '9',
+    pdfBase64: PDF_DATA_URI
+  })).json();
+
+  assert.strictEqual(saved.ok, true);
+  assert.strictEqual(saved.filename, 'Receipt_10.pdf');
+
+  const fetched = await (await api('/api/receipts/' + saved.id)).json();
+  assert.strictEqual(fetched.category, 'Invoice');
+  assert.strictEqual(fetched.linkedInvoiceNumber, '9');
+
+  const pdfRes = await api(`/api/receipts/${saved.id}/pdf`);
+  assert.strictEqual(pdfRes.status, 200);
+  const bytes = Buffer.from(await pdfRes.arrayBuffer());
+  assert.strictEqual(bytes.subarray(0, 4).toString('latin1'), '%PDF');
+  assert.deepStrictEqual(bytes, PDF_BYTES);
+});
+
+test('defaults a receipt with no category to Other', async () => {
+  const saved = await (await postJson('/api/receipts', {
+    receiptNumber: '11', payerName: 'Someone', amount: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  const fetched = await (await api('/api/receipts/' + saved.id)).json();
+  assert.strictEqual(fetched.category, 'Other');
+});
+
+test('rejects a receipt with an invalid category', async () => {
+  const res = await postJson('/api/receipts', {
+    receiptNumber: '12', payerName: 'Someone', amount: 10, category: 'Bogus', pdfBase64: PDF_DATA_URI
+  });
+  assert.strictEqual(res.status, 400);
+});
+
+test('re-archiving the same receipt number replaces the entry instead of duplicating it', async () => {
+  const body = { receiptNumber: '20', payerName: 'Repeat Payer', amount: 50, pdfBase64: PDF_DATA_URI };
+
+  const first = await (await postJson('/api/receipts', body)).json();
+  const second = await (await postJson('/api/receipts', body)).json();
+
+  assert.strictEqual(second.replaced, true);
+  assert.strictEqual(second.id, first.id, 'the record id should be stable across re-saves');
+
+  const all = await (await api('/api/receipts')).json();
+  assert.strictEqual(all.filter(r => r.id === first.id).length, 1);
+});
+
+test('filters receipts by category and linkedInvoiceId', async () => {
+  const invoiceRcpt = await (await postJson('/api/receipts', {
+    receiptNumber: '30', payerName: 'Invoice Payer', amount: 100,
+    category: 'Invoice', linkedInvoiceId: 'inv_abc', pdfBase64: PDF_DATA_URI
+  })).json();
+  await postJson('/api/receipts', {
+    receiptNumber: '31', payerName: 'Capital Payer', amount: 200, category: 'Capital', pdfBase64: PDF_DATA_URI
+  });
+
+  const byCategory = await (await api('/api/receipts?category=Capital')).json();
+  assert.ok(byCategory.every(r => r.category === 'Capital'));
+  assert.ok(byCategory.some(r => r.receiptNumber === '31'));
+
+  const byInvoice = await (await api('/api/receipts?linkedInvoiceId=inv_abc')).json();
+  assert.strictEqual(byInvoice.length, 1);
+  assert.strictEqual(byInvoice[0].id, invoiceRcpt.id);
+});
+
+test('deletes an archived receipt: record disappears and the PDF is removed from disk', async () => {
+  const saved = await (await postJson('/api/receipts', {
+    receiptNumber: '40', payerName: 'Delete Me', amount: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  const filePath = path.join(tmpDir, 'pdfs', 'receipts', saved.filename);
+  assert.ok(fs.existsSync(filePath), 'PDF should exist before delete');
+
+  const del = await api('/api/receipts/' + saved.id, { method: 'DELETE' });
+  assert.strictEqual(del.status, 200);
+  assert.strictEqual((await del.json()).ok, true);
+
+  assert.strictEqual((await api('/api/receipts/' + saved.id)).status, 404);
+  assert.strictEqual((await api('/api/receipts/' + saved.id + '/pdf')).status, 404);
+  assert.ok(!fs.existsSync(filePath), 'PDF should be removed from disk, not just the record');
+});
+
+test('deleting an unknown receipt id 404s instead of silently no-opping', async () => {
+  assert.strictEqual((await api('/api/receipts/rcpt_nope', { method: 'DELETE' })).status, 404);
+  assert.strictEqual((await api('/api/receipts/rcpt_nope')).status, 404);
+  assert.strictEqual((await api('/api/receipts/rcpt_nope/pdf')).status, 404);
+});
+
+test('deleting a receipt whose PDF is already missing from disk still succeeds', async () => {
+  const saved = await (await postJson('/api/receipts', {
+    receiptNumber: '41', payerName: 'Orphan Payer', amount: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  fs.unlinkSync(path.join(tmpDir, 'pdfs', 'receipts', saved.filename));
+
+  const del = await api('/api/receipts/' + saved.id, { method: 'DELETE' });
+  assert.strictEqual(del.status, 200, 'a missing file on disk should not block deleting the record');
+});
+
 // ---------------------------------------------------------------- body limits
 
 // Archiving used to fail silently because generated PDFs exceeded the body
@@ -324,5 +440,6 @@ test('reports dashboard stats', async () => {
   assert.ok(stats.employees > 0);
   assert.ok(stats.clients > 0);
   assert.ok(stats.invoices > 0);
+  assert.ok(stats.receipts > 0);
   assert.strictEqual(typeof stats.invoicedTotal, 'number');
 });

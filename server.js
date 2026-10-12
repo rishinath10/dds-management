@@ -13,6 +13,7 @@ const DATA_DIR = process.env.DDS_DATA_DIR || path.join(__dirname, 'data');
 const PDF_DIR = process.env.DDS_PDF_DIR || path.join(__dirname, 'pdfs');
 const PDF_PAYSLIPS_DIR = path.join(PDF_DIR, 'payslips');
 const PDF_INVOICES_DIR = path.join(PDF_DIR, 'invoices');
+const PDF_RECEIPTS_DIR = path.join(PDF_DIR, 'receipts');
 
 const EMP_FILE = path.join(DATA_DIR, 'employees.json');
 const COMPANY_FILE = path.join(DATA_DIR, 'company.json');
@@ -20,9 +21,10 @@ const PAYSLIPS_FILE = path.join(DATA_DIR, 'payslips.json');
 const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
 const INVOICE_SETTINGS_FILE = path.join(DATA_DIR, 'invoice_settings.json');
 const INVOICES_FILE = path.join(DATA_DIR, 'invoices.json');
+const RECEIPTS_FILE = path.join(DATA_DIR, 'receipts.json');
 
 // ---- ensure storage exists ----
-for (const dir of [DATA_DIR, PDF_DIR, PDF_PAYSLIPS_DIR, PDF_INVOICES_DIR]) {
+for (const dir of [DATA_DIR, PDF_DIR, PDF_PAYSLIPS_DIR, PDF_INVOICES_DIR, PDF_RECEIPTS_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 function ensureFile(file, defaultContent) {
@@ -69,6 +71,7 @@ ensureFile(INVOICE_SETTINGS_FILE, {
   bankOfficerMail: ''
 });
 ensureFile(INVOICES_FILE, []);
+ensureFile(RECEIPTS_FILE, []);
 
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -102,6 +105,14 @@ function backfillIds(file, prefix) {
 }
 backfillIds(PAYSLIPS_FILE, 'ps_');
 backfillIds(INVOICES_FILE, 'inv_');
+backfillIds(RECEIPTS_FILE, 'rcpt_');
+
+// A receipt's category says what kind of money-in event it records. Only
+// "Invoice" receipts represent trade income and get a linked Invoice record;
+// the others (capital injected by a director, a refund, anything else) are
+// real money movements worth keeping visible, but aren't something DDS billed
+// for, so they never get an Invoice.
+const RECEIPT_CATEGORIES = ['Invoice', 'Capital', 'Refund', 'Other'];
 
 // Resolve an archived record's PDF and stream it back. The filename always
 // comes from our own stored record, never from the URL, and the resolved path
@@ -421,11 +432,107 @@ app.delete('/api/invoices/:id', (req, res) => {
 });
 
 // =========================================================
+// Receipts (acknowledges money received — may or may not be invoice income)
+// =========================================================
+
+// ---- Next receipt number (suggestion only, always editable in the UI) ----
+app.get('/api/receipts/next-number', (req, res) => {
+  const receipts = readJson(RECEIPTS_FILE) || [];
+  const nums = receipts
+    .map(r => parseInt(String(r.receiptNumber).replace(/[^0-9]/g, ''), 10))
+    .filter(n => !isNaN(n));
+  const next = nums.length ? Math.max(...nums) + 1 : 1;
+  res.json({ next });
+});
+
+app.post('/api/receipts', (req, res) => {
+  const { receiptNumber, date, payerName, amount, category, bankRef, remarks,
+          linkedInvoiceId, linkedInvoiceNumber, pdfBase64 } = req.body || {};
+  if (!pdfBase64 || !receiptNumber || !payerName) {
+    return res.status(400).json({ error: 'receiptNumber, payerName and pdfBase64 are required.' });
+  }
+  if (category && !RECEIPT_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: 'category must be one of: ' + RECEIPT_CATEGORIES.join(', ') });
+  }
+
+  const filename = `Receipt_${safeSegment(receiptNumber, 'unnumbered')}.pdf`;
+
+  try {
+    writePdfFromBase64(PDF_RECEIPTS_DIR, filename, pdfBase64);
+  } catch (e) {
+    console.error('Failed to write receipt PDF', e);
+    return res.status(500).json({ error: 'Failed to save PDF on server.' });
+  }
+
+  const receipts = readJson(RECEIPTS_FILE) || [];
+  // Re-saving the same receipt number overwrites its PDF, so replace the
+  // record too instead of leaving a stale duplicate behind.
+  const existingIdx = receipts.findIndex(r => String(r.receiptNumber) === String(receiptNumber));
+
+  const record = {
+    id: existingIdx > -1 ? receipts[existingIdx].id : 'rcpt_' + crypto.randomUUID(),
+    receiptNumber,
+    date: date || '',
+    payerName,
+    amount,
+    category: category || 'Other',
+    bankRef: bankRef || '',
+    remarks: remarks || '',
+    linkedInvoiceId: linkedInvoiceId || null,
+    linkedInvoiceNumber: linkedInvoiceNumber || null,
+    filename,
+    savedAt: new Date().toISOString()
+  };
+  if (existingIdx > -1) receipts[existingIdx] = record; else receipts.push(record);
+  writeJson(RECEIPTS_FILE, receipts);
+
+  res.json({ ok: true, filename, id: record.id, replaced: existingIdx > -1 });
+});
+
+app.get('/api/receipts', (req, res) => {
+  const receipts = readJson(RECEIPTS_FILE) || [];
+  const { category, linkedInvoiceId } = req.query;
+  let result = receipts;
+  if (category) result = result.filter(r => r.category === category);
+  if (linkedInvoiceId) result = result.filter(r => r.linkedInvoiceId === linkedInvoiceId);
+  res.json(result);
+});
+
+app.get('/api/receipts/:id', (req, res) => {
+  const receipts = readJson(RECEIPTS_FILE) || [];
+  const found = receipts.find(r => r.id === req.params.id);
+  if (!found) return res.status(404).json({ error: 'Receipt not found.' });
+  res.json(found);
+});
+
+app.get('/api/receipts/:id/pdf', (req, res) => {
+  const receipts = readJson(RECEIPTS_FILE) || [];
+  sendArchivedPdf(res, PDF_RECEIPTS_DIR, receipts.find(r => r.id === req.params.id));
+});
+
+// Deletes both the archive record and its PDF. The next rclone sync (it runs
+// `rclone sync`, which mirrors deletions) removes it from Drive too — this is
+// permanent, not a trash/recycle bin.
+app.delete('/api/receipts/:id', (req, res) => {
+  const receipts = readJson(RECEIPTS_FILE) || [];
+  const record = receipts.find(r => r.id === req.params.id);
+  if (!record) return res.status(404).json({ error: 'Receipt not found.' });
+
+  if (record.filename) {
+    try { fs.unlinkSync(path.join(PDF_RECEIPTS_DIR, record.filename)); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  writeJson(RECEIPTS_FILE, receipts.filter(r => r.id !== req.params.id));
+  res.json({ ok: true });
+});
+
+// =========================================================
 // Dashboard stats
 // =========================================================
 app.get('/api/stats', (req, res) => {
   const payslips = readJson(PAYSLIPS_FILE) || [];
   const invoices = readJson(INVOICES_FILE) || [];
+  const receipts = readJson(RECEIPTS_FILE) || [];
   const thisMonth = new Date().toISOString().slice(0, 7);
   const invoicedThisMonth = invoices
     .filter(i => String(i.date || i.savedAt || '').slice(0, 7) === thisMonth)
@@ -436,6 +543,7 @@ app.get('/api/stats', (req, res) => {
     clients: (readJson(CLIENTS_FILE) || []).length,
     payslips: payslips.length,
     invoices: invoices.length,
+    receipts: receipts.length,
     payslipsThisMonth: payslips.filter(p => p.payMonth === thisMonth).length,
     invoicedThisMonth: Math.round(invoicedThisMonth * 100) / 100,
     invoicedTotal: Math.round(invoices.reduce((s, i) => s + (Number(i.total) || 0), 0) * 100) / 100,

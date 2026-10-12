@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/assets/dds-logo-mark.png">
+<title>DDS Marine — Receipt Generator</title>
+<style>
+  :root{
+    --navy:#0E2240; --navy-light:#16305c; --gold:#C8973F; --gold-light:#e0b968;
+    --cream:#F7F3EA; --ink:#1c1c1c; --muted:#6b7280; --line:#e3ddcd; --danger:#b3261e;
+    --capital:#5a6eaa; --refund:#aa5a46;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Helvetica Neue', Arial, sans-serif;background:var(--cream);color:var(--ink);}
+  .topbar{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;}
+  .topbar .logo-mini{width:40px;height:40px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold);flex-shrink:0;overflow:hidden;}
+  .topbar .logo-mini img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+  .topbar h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.3px;}
+  .topbar p{margin:0;font-size:12px;color:var(--gold-light);}
+  .topbar p a{color:var(--gold-light);}
+
+  .main{max-width:760px;margin:0 auto;padding:24px 28px 60px 28px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:18px;}
+  .card h2{font-size:16px;margin:0 0 4px 0;color:var(--navy);}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 16px 0;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media (max-width:600px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  label{display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px;}
+  input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%;padding:9px 10px;border:1px solid #d7d2c2;border-radius:7px;font-size:14px;font-family:inherit;background:#fff;
+  }
+  input:focus, select:focus, textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,151,63,.15);}
+  .field{margin-bottom:14px;}
+  .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+  .cat-chip{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 9px;border-radius:20px;text-transform:uppercase;}
+  .cat-Invoice{background:rgba(200,151,63,.15);color:#8a6420;}
+  .cat-Capital{background:rgba(90,110,170,.15);color:var(--capital);}
+  .cat-Refund{background:rgba(170,90,70,.15);color:var(--refund);}
+  .cat-Other{background:rgba(107,114,128,.15);color:var(--muted);}
+
+  .btn{padding:11px 20px;border-radius:8px;border:none;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{background:var(--navy-light);}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-gold:hover{background:#b6842f;}
+  .btn-outline{background:#fff;border:1.5px solid var(--navy);color:var(--navy);}
+  .btn-outline:hover{background:var(--cream);}
+  .btn-text{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+
+  .hidden{display:none !important;}
+
+  .receipt-wrap{display:flex;justify-content:center;padding:10px 0 30px 0;}
+  #receiptDoc{
+    width:210mm;min-height:200mm;background:#fff;padding:16mm 16mm 14mm 16mm;
+    box-shadow:0 4px 24px rgba(0,0,0,.12);
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-mini"><img src="/assets/dds-logo-mark.png" alt="DDS"></div>
+  <div>
+    <h1>DDS Marine — Receipt Generator</h1>
+    <p>Official receipts for money received · <a href="/">← Dashboard</a> · <a href="/archive.html">Archive</a></p>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="card" id="formArea">
+    <h2>New Receipt</h2>
+    <p class="sub">Acknowledges money received — from a client against an invoice, a capital injection, a refund, or anything else. Downloads as a <strong>vector PDF</strong>, same as invoices and payslips.</p>
+
+    <div class="grid3">
+      <div class="field"><label>Receipt #</label><input type="text" id="rcptNumber"></div>
+      <div class="field"><label>Date</label><input type="date" id="rcptDate"></div>
+      <div class="field"><label>Bank Ref</label><input type="text" id="rcptBankRef" placeholder="e.g. MBB, GEB, EB"></div>
+    </div>
+
+    <div class="field"><label>Received From</label><input type="text" id="rcptPayer" placeholder="Payer or company name"></div>
+
+    <div class="grid2">
+      <div class="field"><label>Amount Received (RM)</label><input type="number" id="rcptAmount" min="0" step="0.01"></div>
+      <div class="field">
+        <label>Category</label>
+        <select id="rcptCategory">
+          <option value="Invoice">Invoice — real trade income</option>
+          <option value="Capital">Capital — director/shareholder injection</option>
+          <option value="Refund">Refund</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field" id="linkedInvoiceField">
+      <label>Linked Invoice <span style="font-weight:400;color:var(--muted);">(optional — only for the Invoice category)</span></label>
+      <select id="rcptLinkedInvoice">
+        <option value="">— none —</option>
+      </select>
+      <p class="hint">Pick an invoice already in the Archive to link this receipt to it. Leave as "none" if the invoice isn't archived yet, or doesn't exist as a separate record.</p>
+    </div>
+
+    <div class="field">
+      <label>Being Payment For <span style="font-weight:400;color:var(--muted);">(remarks)</span></label>
+      <textarea id="rcptRemarks" rows="2" placeholder="e.g. Payment received against Invoice 9."></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-gold" id="generateBtn">Generate Receipt →</button>
+    </div>
+  </div>
+
+  <!-- Receipt preview -->
+  <div class="hidden" id="previewArea">
+    <div class="btn-row" style="margin-bottom:14px;">
+      <button class="btn btn-outline" id="backToEditBtn">← Back to Edit</button>
+      <button class="btn btn-gold" id="downloadPdfBtn">Download PDF</button>
+      <button class="btn btn-outline" id="printBtn">Print</button>
+      <button class="btn btn-primary" id="saveArchiveBtn">Save to Archive (→ Drive)</button>
+    </div>
+    <div class="receipt-wrap"><div id="receiptDoc"></div></div>
+  </div>
+
+</div>
+
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/pdf-docs.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  async function apiGet(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('GET '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+  async function apiPost(url, body){
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!r.ok){
+      let detail = '';
+      try{ detail = (await r.json()).error || ''; }catch(e){}
+      throw new Error(detail || ('POST '+url+' failed ('+r.status+')'));
+    }
+    return r.json();
+  }
+
+  const $ = id => document.getElementById(id);
+  let settings = {};
+  let invoices = [];
+  let currentReceipt = null;
+
+  async function init(){
+    try{ const s = await apiGet('/api/invoice-settings'); if(s && Object.keys(s).length) settings = s; }catch(e){ console.error(e); }
+    try{ invoices = await apiGet('/api/invoices'); }catch(e){ console.error(e); invoices = []; }
+
+    const sel = $('rcptLinkedInvoice');
+    invoices.slice().sort((a,b)=> String(b.savedAt||'').localeCompare(String(a.savedAt||''))).forEach(inv=>{
+      const opt = document.createElement('option');
+      opt.value = inv.id;
+      opt.dataset.number = inv.invoiceNumber;
+      opt.textContent = `#${inv.invoiceNumber} — ${inv.clientName||'—'} (${rm(inv.total)})`;
+      sel.appendChild(opt);
+    });
+
+    let nextNum = 1;
+    try{ const r = await apiGet('/api/receipts/next-number'); nextNum = r.next; }catch(e){}
+    $('rcptNumber').value = nextNum;
+    $('rcptDate').value = new Date().toISOString().slice(0,10);
+
+    toggleLinkedInvoiceField();
+  }
+
+  function rm(n){ return 'RM ' + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  const escapeHtml = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function toggleLinkedInvoiceField(){
+    $('linkedInvoiceField').classList.toggle('hidden', $('rcptCategory').value !== 'Invoice');
+  }
+  $('rcptCategory').onchange = toggleLinkedInvoiceField;
+
+  function collectReceipt(){
+    const sel = $('rcptLinkedInvoice');
+    const opt = sel.options[sel.selectedIndex];
+    const category = $('rcptCategory').value;
+    return {
+      receiptNumber: $('rcptNumber').value.trim(),
+      date: $('rcptDate').value,
+      payerName: $('rcptPayer').value.trim(),
+      amount: Number($('rcptAmount').value)||0,
+      category: category,
+      bankRef: $('rcptBankRef').value.trim(),
+      remarks: $('rcptRemarks').value.trim(),
+      linkedInvoiceId: (category === 'Invoice' && opt && opt.value) ? opt.value : null,
+      linkedInvoiceNumber: (category === 'Invoice' && opt && opt.value) ? opt.dataset.number : null
+    };
+  }
+
+  $('generateBtn').onclick = ()=>{
+    const receipt = collectReceipt();
+    if(!receipt.receiptNumber){ alert('Please enter a receipt number.'); return; }
+    if(!receipt.payerName){ alert('Please enter who the payment was received from.'); return; }
+    currentReceipt = receipt;
+
+    const pdf = DDSPdf.buildReceipt({ settings, receipt });
+    pdf.output('datauristring'); // warm the render before swapping panels
+    renderPreviewDoc(receipt);
+    $('formArea').classList.add('hidden');
+    $('previewArea').classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+
+  $('backToEditBtn').onclick = ()=>{
+    $('previewArea').classList.add('hidden');
+    $('formArea').classList.remove('hidden');
+  };
+
+  function renderPreviewDoc(r){
+    const catClass = 'cat-' + (r.category || 'Other');
+    const badge = r.category === 'Invoice' && r.linkedInvoiceNumber
+      ? `Invoice Payment — Invoice #${escapeHtml(r.linkedInvoiceNumber)}`
+      : escapeHtml(r.category);
+    $('receiptDoc').innerHTML = `
+      <div style="font-family:'Helvetica Neue',Arial,sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+          <img src="/assets/dds-logo.png" style="width:170px;" alt="DDS">
+          <div style="text-align:right;">
+            <div style="font-size:19px;color:#444;">Official Receipt</div>
+            <div style="font-weight:700;color:#0E2240;">${escapeHtml(settings.companyName||'')}</div>
+          </div>
+        </div>
+        <div style="background:#F7F3EA;border-radius:8px;padding:14px 16px;margin-bottom:14px;">
+          <div style="font-size:10px;letter-spacing:.08em;color:#C8973F;font-weight:700;">RECEIVED FROM</div>
+          <div style="font-size:15px;font-weight:700;color:#0E2240;">${escapeHtml(r.payerName)}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:6px;">Receipt #${escapeHtml(r.receiptNumber)} · ${escapeHtml(r.date)} · Ref: ${escapeHtml(r.bankRef||'—')}</div>
+        </div>
+        <span class="cat-chip ${catClass}">${badge}</span>
+        <div style="background:#F7F3EA;border:1.5px solid #C8973F;border-radius:8px;padding:14px 16px;margin:14px 0;">
+          <div style="font-size:11px;font-weight:700;color:#0E2240;">AMOUNT RECEIVED</div>
+          <div style="font-size:24px;font-weight:800;color:#0E2240;text-align:right;">${rm(r.amount)}</div>
+        </div>
+        ${r.remarks ? `<div style="font-size:12.5px;"><strong>Being payment for:</strong> ${escapeHtml(r.remarks)}</div>` : ''}
+      </div>`;
+  }
+
+  async function buildPdf(){
+    return DDSPdf.buildReceipt({ settings, receipt: currentReceipt });
+  }
+
+  $('printBtn').onclick = ()=> window.print();
+
+  $('downloadPdfBtn').onclick = async ()=>{
+    const btn = $('downloadPdfBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Preparing PDF…'; btn.disabled = true;
+    try{
+      const pdf = await buildPdf();
+      pdf.save(`Receipt_${currentReceipt.receiptNumber}.pdf`);
+    }catch(err){
+      console.error(err);
+      alert('PDF generation failed.');
+    }finally{
+      btn.textContent = original; btn.disabled = false;
+    }
+  };
+
+  $('saveArchiveBtn').onclick = async ()=>{
+    const btn = $('saveArchiveBtn');
+    const original = btn.textContent;
+    if(!currentReceipt) return;
+    btn.textContent = 'Saving…'; btn.disabled = true;
+    try{
+      const pdf = await buildPdf();
+      const pdfBase64 = pdf.output('datauristring');
+      const res = await apiPost('/api/receipts', { ...currentReceipt, pdfBase64 });
+      btn.textContent = res && res.replaced ? 'Archive updated ✓' : 'Saved to Archive ✓';
+    }catch(err){
+      console.error(err);
+      btn.textContent = 'Save failed';
+      alert('Could not save to the archive.\n\n' + (err && err.message ? err.message : err));
+    }finally{
+      btn.disabled = false;
+      setTimeout(()=>{ btn.textContent = original; }, 2500);
+    }
+  };
+
+  init();
+})();
+</script>
+</body>
+</html>

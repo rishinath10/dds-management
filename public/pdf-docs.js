@@ -596,9 +596,119 @@
     return pdf;
   }
 
+  // ---------------------------------------------------------------- receipt
+
+  // Category → the colour its badge and amount band take, so Capital/Refund/
+  // Other receipts are visually distinct from real trade-income ones at a
+  // glance, both on screen and on the printed PDF.
+  var RECEIPT_CATEGORY_COLOR = {
+    Invoice: GOLD,
+    Capital: [90, 110, 170],
+    Refund: [170, 90, 70],
+    Other: MUTED
+  };
+
+  function buildReceipt(data) {
+    var jsPDFCtor = (global.jspdf && global.jspdf.jsPDF) || global.jsPDF;
+    var pdf = new jsPDFCtor({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    var s = data.settings || {};
+    var r = data.receipt || {};
+    var categoryColor = RECEIPT_CATEGORY_COLOR[r.category] || MUTED;
+
+    var y = MARGIN;
+
+    // ---- header, matching the invoice's ---------------------------------
+    drawLogoMark(pdf, MARGIN + 13, y + 12, 24);
+    setFont(pdf, 'bolditalic', 6, INK);
+    pdf.text('"Fueling Global Trade, Connecting Continents"', MARGIN + 13, y + 28, { align: 'center' });
+
+    setFont(pdf, 'normal', 15, [68, 68, 68]);
+    pdf.text('Official Receipt', PAGE_W - MARGIN, y + 5, { align: 'right' });
+
+    setFont(pdf, 'bold', 9.5, NAVY);
+    pdf.text(String(s.companyName || ''), PAGE_W - MARGIN, y + 11.5, { align: 'right' });
+
+    setFont(pdf, 'normal', 7.5, MUTED);
+    var hy = y + 16;
+    [s.headerAddressLine1, s.headerAddressLine2, s.headerAddressLine3, s.headerCountry]
+      .filter(Boolean)
+      .forEach(function (line) {
+        pdf.text(String(line), PAGE_W - MARGIN, hy, { align: 'right' });
+        hy += 3.8;
+      });
+    hy += 2;
+    if (s.tradingEmail) { pdf.text(String(s.tradingEmail), PAGE_W - MARGIN, hy, { align: 'right' }); hy += 3.8; }
+    if (s.regLine) { pdf.text(String(s.regLine), PAGE_W - MARGIN, hy, { align: 'right' }); hy += 3.8; }
+
+    y = Math.max(hy, y + 34) + 5;
+
+    // ---- received-from band ----------------------------------------------
+    var leftH = 16 + 2;
+    var rightH = 7 + 3 * 5;
+    var bandH = Math.max(leftH, rightH, 24);
+
+    band(pdf, MARGIN, y, CONTENT_W, bandH, CREAM, null, 2);
+
+    setFont(pdf, 'bold', 6.5, GOLD);
+    pdf.text('RECEIVED FROM', MARGIN + 5, y + 6);
+    setFont(pdf, 'bold', 10, NAVY);
+    pdf.text(String(r.payerName || ''), MARGIN + 5, y + 11.5);
+
+    var metaRight = PAGE_W - MARGIN - 5;
+    var metaLabelX = metaRight - 32;
+    [['Receipt #', String(r.receiptNumber || '')],
+     ['Date', dateLabel(r.date)],
+     ['Bank Ref', String(r.bankRef || '—')]].forEach(function (row, i) {
+      var ry = y + 7 + i * 5;
+      setFont(pdf, 'normal', 8, MUTED);
+      pdf.text(row[0], metaLabelX, ry, { align: 'right' });
+      setFont(pdf, 'bold', 8, NAVY);
+      pdf.text(row[1], metaRight, ry, { align: 'right' });
+    });
+
+    y += bandH + 10;
+
+    // ---- category badge ---------------------------------------------------
+    setFont(pdf, 'bold', 7, categoryColor);
+    var badgeLabel = r.category === 'Invoice' && r.linkedInvoiceNumber
+      ? 'INVOICE PAYMENT — Invoice #' + r.linkedInvoiceNumber
+      : String(r.category || 'Other').toUpperCase();
+    pdf.text(badgeLabel, MARGIN, y);
+    y += 8;
+
+    // ---- amount band --------------------------------------------------
+    var amtH = 18;
+    band(pdf, MARGIN, y, CONTENT_W, amtH, CREAM, categoryColor, 2);
+    setFont(pdf, 'bold', 7.5, NAVY);
+    pdf.text('AMOUNT RECEIVED', MARGIN + 5, y + 6.5);
+    setFont(pdf, 'bold', 18, NAVY);
+    pdf.text(money(r.amount), PAGE_W - MARGIN - 5, y + 14.5, { align: 'right' });
+    y += amtH + 10;
+
+    // ---- being payment for -----------------------------------------------
+    if (r.remarks) {
+      setFont(pdf, 'bold', 8, INK);
+      pdf.text('Being payment for:', MARGIN, y);
+      setFont(pdf, 'normal', 8, INK);
+      y = paragraph(pdf, r.remarks, MARGIN + 32, y, CONTENT_W - 32, 4) + 8;
+    }
+
+    // ---- footer -------------------------------------------------------
+    var footY = PAGE_H - MARGIN - 6;
+    hLine(pdf, MARGIN, footY - 4, PAGE_W - MARGIN, LINE, 0.15);
+    setFont(pdf, 'normal', 6.5, MUTED);
+    pdf.text('This is a computer-generated receipt and does not require a signature. Generated on ' +
+             todayLabel() + '.', PAGE_W / 2, footY, { align: 'center' });
+    pdf.text(String(s.companyName || ''), PAGE_W / 2, footY + 3.5, { align: 'center' });
+
+    return pdf;
+  }
+
   global.DDSPdf = {
     buildPayslip: buildPayslip,
     buildInvoice: buildInvoice,
+    buildReceipt: buildReceipt,
     // Exposed for tests / reuse.
     money: money,
     monthLabel: monthLabel,
