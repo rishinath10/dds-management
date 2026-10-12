@@ -59,6 +59,7 @@
     width:210mm;min-height:200mm;background:#fff;padding:16mm 16mm 14mm 16mm;
     box-shadow:0 4px 24px rgba(0,0,0,.12);
   }
+  input[readonly]{background:#f3efe4;color:var(--muted);cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -74,7 +75,7 @@
 <div class="main">
 
   <div class="card" id="formArea">
-    <h2>New Receipt</h2>
+    <h2 id="formHeading">New Receipt</h2>
     <p class="sub">Acknowledges money received — from a client against an invoice, a capital injection, a refund, or anything else. Downloads as a <strong>vector PDF</strong>, same as invoices and payslips.</p>
 
     <div class="grid3">
@@ -175,6 +176,33 @@
       opt.textContent = `#${inv.invoiceNumber} — ${inv.clientName||'—'} (${rm(inv.total, inv.currency)})`;
       sel.appendChild(opt);
     });
+
+    // Arriving from the Archive's "Edit" button: reopen the receipt under its
+    // own (locked) number, so saving replaces the archived copy.
+    const editId = new URLSearchParams(location.search).get('edit');
+    if(editId){
+      try{
+        const r = await apiGet('/api/receipts/' + encodeURIComponent(editId));
+        $('formHeading').textContent = 'Edit Receipt #' + r.receiptNumber;
+        $('rcptNumber').value = r.receiptNumber;
+        $('rcptNumber').readOnly = true;
+        $('rcptDate').value = r.date || '';
+        $('rcptBankRef').value = r.bankRef || '';
+        $('rcptPayer').value = r.payerName || '';
+        $('rcptAmount').value = r.amount;
+        $('rcptCurrency').value = r.currency === 'USD' ? 'USD' : 'MYR';
+        $('rcptCategory').value = r.category || 'Other';
+        $('rcptLinkedInvoice').value = r.linkedInvoiceId || '';
+        $('rcptRemarks').value = r.remarks || '';
+        toggleLinkedInvoiceField();
+        history.replaceState(null, '', location.pathname);
+        return;
+      }catch(e){
+        console.error(e);
+        alert('Could not load that receipt to edit.');
+        history.replaceState(null, '', location.pathname);
+      }
+    }
 
     let nextNum = 1;
     try{ const r = await apiGet('/api/receipts/next-number'); nextNum = r.next; }catch(e){}

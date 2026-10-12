@@ -231,7 +231,8 @@
         <td class="actions">
           <a class="link-btn" href="/api/invoices/${encodeURIComponent(i.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
           ${i.items && i.items.length
-            ? `<a class="link-btn gold" href="/invoice.html?duplicate=${encodeURIComponent(i.id)}" title="Open a new invoice pre-filled from this one">Duplicate</a>`
+            ? `<a class="link-btn gold" href="/invoice.html?edit=${encodeURIComponent(i.id)}" title="Change this invoice; saving replaces the archived copy">Edit</a>
+               <a class="link-btn gold" href="/invoice.html?duplicate=${encodeURIComponent(i.id)}" title="Open a new invoice pre-filled from this one">Duplicate</a>`
             : ''}
           <button class="link-btn danger" data-delete="invoices" data-id="${escapeHtml(i.id)}" data-label="${escapeHtml('Invoice #' + i.invoiceNumber + ' — ' + (i.clientName||''))}">Delete</button>
         </td>
@@ -258,6 +259,7 @@
         <td>${escapeHtml(savedLabel(r.savedAt))}</td>
         <td class="actions">
           <a class="link-btn" href="/api/receipts/${encodeURIComponent(r.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+          <a class="link-btn gold" href="/receipt.html?edit=${encodeURIComponent(r.id)}" title="Change this receipt; saving replaces the archived copy">Edit</a>
           <button class="link-btn danger" data-delete="receipts" data-id="${escapeHtml(r.id)}" data-label="${escapeHtml('Receipt #' + r.receiptNumber + ' — ' + (r.payerName||''))}">Delete</button>
         </td>
       </tr>`;

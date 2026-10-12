@@ -142,6 +142,7 @@
     #invoiceDoc{position:absolute;left:0;top:0;box-shadow:none;width:100%;padding:10mm;}
     .invoice-wrap{padding:0;}
   }
+  input[readonly]{background:#f3efe4;color:var(--muted);cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -355,26 +356,29 @@
     try{ const s = await apiGet('/api/invoice-settings'); if(s && Object.keys(s).length) settings = s; }catch(e){ console.error(e); }
     renderClientList();
 
-    // Arriving from the Archive's "Duplicate" button: reopen that invoice's
-    // client and line items, under a fresh invoice number.
-    const duplicateId = new URLSearchParams(location.search).get('duplicate');
-    if(duplicateId){
+    // Arriving from the Archive: "Duplicate" reopens an invoice's client and
+    // line items under a fresh number; "Edit" reopens it under its own number
+    // and dates, so saving replaces the archived copy.
+    const params = new URLSearchParams(location.search);
+    const mode = params.get('edit') ? 'edit' : params.get('duplicate') ? 'duplicate' : null;
+    if(mode){
+      const verb = mode === 'edit' ? 'edited' : 'duplicated';
       try{
-        const source = await apiGet('/api/invoices/' + encodeURIComponent(duplicateId));
+        const source = await apiGet('/api/invoices/' + encodeURIComponent(params.get(mode)));
         const client = clients.find(c=>c.id===source.clientId);
         if(client){
           selectedClientId = client.id;
           renderClientList();
           hideAllPanels();
           $('emptyState').classList.add('hidden');
-          await openInvoiceForm(client, source);
+          await openInvoiceForm(client, source, mode);
           history.replaceState(null, '', location.pathname);
           return;
         }
-        alert('That invoice’s client is no longer in the client list, so it can’t be duplicated.');
+        alert(`That invoice’s client is no longer in the client list, so it can’t be ${verb}.`);
       }catch(e){
         console.error(e);
-        alert('Could not load that invoice to duplicate.');
+        alert(`Could not load that invoice to be ${verb}.`);
       }
       history.replaceState(null, '', location.pathname);
     }
@@ -540,18 +544,27 @@
     await openInvoiceForm(client);
   }
 
-  async function openInvoiceForm(client, prefill){
-    $('invoiceHeading').textContent = (prefill ? 'Duplicate of #' + prefill.invoiceNumber + ' — ' : 'New Invoice — ') + client.name;
+  async function openInvoiceForm(client, prefill, mode){
+    const editing = mode === 'edit' && prefill;
+    $('invoiceHeading').textContent =
+      (editing ? 'Edit Invoice #' + prefill.invoiceNumber + ' — '
+       : prefill ? 'Duplicate of #' + prefill.invoiceNumber + ' — ' : 'New Invoice — ') + client.name;
     $('invoiceSub').textContent = (client.address||'').split('\n')[0] || '';
 
-    // A duplicate always gets a fresh number — the copied one is already used.
-    let nextNum = 1;
-    try{ const r = await apiGet('/api/invoices/next-number'); nextNum = r.next; }catch(e){}
-    $('invNumber').value = nextNum;
+    // Editing keeps the number (locked, since saving under it is what replaces
+    // the archived copy); new invoices and duplicates get a fresh one.
+    if(editing){
+      $('invNumber').value = prefill.invoiceNumber;
+    }else{
+      let nextNum = 1;
+      try{ const r = await apiGet('/api/invoices/next-number'); nextNum = r.next; }catch(e){}
+      $('invNumber').value = nextNum;
+    }
+    $('invNumber').readOnly = !!editing;
 
     const today = new Date().toISOString().slice(0,10);
-    $('invDate').value = today;
-    $('invDueDate').value = today;
+    $('invDate').value = editing ? (prefill.date || '') : today;
+    $('invDueDate').value = editing ? (prefill.dueDate || '') : today;
     $('invNotes').value = prefill ? (prefill.notes || '') : '';
     $('invCurrency').value = prefill && prefill.currency === 'USD' ? 'USD' : 'MYR';
 

@@ -85,6 +85,13 @@ and updates that archive entry in place rather than leaving a stale copy
 behind. The button says "Archive updated ✓" instead of "Saved to Archive ✓"
 when that happens.
 
+**Editing an archived invoice or receipt:** click **Edit** on its row in the
+Archive. It reopens with everything filled in — including its original date
+and currency — under its own number, which is locked. Change what you need,
+then Generate → Save to Archive: that replaces the archived record and
+regenerates its PDF. (Use **Duplicate** instead when you want a new invoice
+based on an old one.)
+
 **Invoice numbering:** the "Invoice #" field is pre-filled with (highest
 number seen so far + 1), but it's just a suggestion — fully editable, so
 skipping numbers (e.g. going from 73 to 80 because other invoices exist
