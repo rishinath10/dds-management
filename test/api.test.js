@@ -483,3 +483,95 @@ test('reports dashboard stats', async () => {
   assert.ok(stats.receipts > 0);
   assert.strictEqual(typeof stats.invoicedTotal, 'number');
 });
+
+// ---------------------------------------------------------------- payment vouchers
+
+test('suggests voucher numbers per year from the voucher date', async () => {
+  const first = await (await api('/api/vouchers/next-number?year=2025')).json();
+  assert.strictEqual(first.next, 'PV-2025-001');
+
+  await postJson('/api/vouchers', {
+    voucherNumber: 'PV-2025-004', payeeName: 'KSL Marine Services', amount: 7800, pdfBase64: PDF_DATA_URI
+  });
+  const after2025 = await (await api('/api/vouchers/next-number?year=2025')).json();
+  assert.strictEqual(after2025.next, 'PV-2025-005');
+
+  // A different year starts its own series.
+  const fresh2026 = await (await api('/api/vouchers/next-number?year=2026')).json();
+  assert.strictEqual(fresh2026.next, 'PV-2026-001');
+});
+
+test('archives a voucher and serves the PDF back intact', async () => {
+  const saved = await (await postJson('/api/vouchers', {
+    voucherNumber: 'PV-2026-010',
+    date: '2026-03-13',
+    payeeName: 'KSL Marine Services',
+    amount: 7800,
+    category: 'Vendor',
+    bankRef: 'GEB',
+    description: 'DDS pilot boat charges',
+    approverName: 'Capt. Dinesh Naidu',
+    approverTitle: 'Managing Director',
+    pdfBase64: PDF_DATA_URI
+  })).json();
+  assert.strictEqual(saved.filename, 'Voucher_PV_2026_010.pdf');
+
+  const fetched = await (await api('/api/vouchers/' + saved.id)).json();
+  assert.strictEqual(fetched.payeeName, 'KSL Marine Services');
+  assert.strictEqual(fetched.category, 'Vendor');
+  assert.strictEqual(fetched.currency, 'MYR');
+
+  const pdfRes = await api(`/api/vouchers/${saved.id}/pdf`);
+  assert.strictEqual(pdfRes.status, 200);
+  assert.ok(Buffer.from(await pdfRes.arrayBuffer()).equals(PDF_BYTES));
+});
+
+test('rejects a voucher with an invalid category or currency', async () => {
+  const badCat = await postJson('/api/vouchers', {
+    voucherNumber: 'PV-2026-011', payeeName: 'X', amount: 1, category: 'Bogus', pdfBase64: PDF_DATA_URI
+  });
+  assert.strictEqual(badCat.status, 400);
+  const badCur = await postJson('/api/vouchers', {
+    voucherNumber: 'PV-2026-012', payeeName: 'X', amount: 1, currency: 'EUR', pdfBase64: PDF_DATA_URI
+  });
+  assert.strictEqual(badCur.status, 400);
+});
+
+test('re-archiving the same voucher number replaces the entry instead of duplicating it', async () => {
+  const body = { voucherNumber: 'PV-2026-020', payeeName: 'Repeat Payee', amount: 50, pdfBase64: PDF_DATA_URI };
+  const first = await (await postJson('/api/vouchers', body)).json();
+  const second = await (await postJson('/api/vouchers', { ...body, amount: 60 })).json();
+  assert.strictEqual(second.replaced, true);
+  assert.strictEqual(second.id, first.id);
+  const all = await (await api('/api/vouchers')).json();
+  const matching = all.filter(v => v.voucherNumber === 'PV-2026-020');
+  assert.strictEqual(matching.length, 1);
+  assert.strictEqual(matching[0].amount, 60);
+});
+
+test('deletes an archived voucher: record disappears and the PDF is removed from disk', async () => {
+  const saved = await (await postJson('/api/vouchers', {
+    voucherNumber: 'PV-2026-030', payeeName: 'Delete Me', amount: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  const filePath = path.join(tmpDir, 'pdfs', 'vouchers', saved.filename);
+  assert.ok(fs.existsSync(filePath));
+
+  const del = await api('/api/vouchers/' + saved.id, { method: 'DELETE' });
+  assert.strictEqual(del.status, 200);
+  assert.ok(!fs.existsSync(filePath));
+  assert.strictEqual((await api('/api/vouchers/' + saved.id)).status, 404);
+  assert.strictEqual((await api('/api/vouchers/pv_nope', { method: 'DELETE' })).status, 404);
+});
+
+test('writes amounts in words for vouchers', () => {
+  const vm = require('node:vm');
+  const ctx = { window: {} };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'pdf-docs.js'), 'utf8'), ctx);
+  const { amountInWords } = ctx.window.DDSPdf;
+  assert.strictEqual(amountInWords(50000, 'MYR'), 'RINGGIT MALAYSIA FIFTY THOUSAND ONLY');
+  assert.strictEqual(amountInWords(15760.96, 'MYR'),
+    'RINGGIT MALAYSIA FIFTEEN THOUSAND SEVEN HUNDRED SIXTY AND SEN NINETY SIX ONLY');
+  assert.strictEqual(amountInWords(248490.42, 'USD'),
+    'US DOLLARS TWO HUNDRED FORTY EIGHT THOUSAND FOUR HUNDRED NINETY AND CENTS FORTY TWO ONLY');
+});

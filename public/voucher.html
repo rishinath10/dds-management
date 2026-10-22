@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/assets/dds-logo-mark.png">
+<title>DDS Marine — Payment Voucher Generator</title>
+<style>
+  :root{
+    --navy:#0E2240; --navy-light:#16305c; --gold:#C8973F; --gold-light:#e0b968;
+    --cream:#F7F3EA; --ink:#1c1c1c; --muted:#6b7280; --line:#e3ddcd; --danger:#b3261e;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Helvetica Neue', Arial, sans-serif;background:var(--cream);color:var(--ink);}
+  .topbar{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:14px;}
+  .topbar .logo-mini{width:40px;height:40px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold);flex-shrink:0;overflow:hidden;}
+  .topbar .logo-mini img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+  .topbar h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.3px;}
+  .topbar p{margin:0;font-size:12px;color:var(--gold-light);}
+  .topbar p a{color:var(--gold-light);}
+
+  .main{max-width:760px;margin:0 auto;padding:24px 28px 60px 28px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:18px;}
+  .card h2{font-size:16px;margin:0 0 4px 0;color:var(--navy);}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 16px 0;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media (max-width:600px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  label{display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px;}
+  input[type=text], input[type=number], input[type=date], select, textarea{
+    width:100%;padding:9px 10px;border:1px solid #d7d2c2;border-radius:7px;font-size:14px;font-family:inherit;background:#fff;
+  }
+  input:focus, select:focus, textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,151,63,.15);}
+  .field{margin-bottom:14px;}
+  .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+
+  .btn{padding:11px 20px;border-radius:8px;border:none;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{background:var(--navy-light);}
+  .btn-gold{background:var(--gold);color:#fff;}
+  .btn-gold:hover{background:#b6842f;}
+  .btn-outline{background:#fff;border:1.5px solid var(--navy);color:var(--navy);}
+  .btn-outline:hover{background:var(--cream);}
+  .btn-text{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+
+  .hidden{display:none !important;}
+
+  .voucher-wrap{display:flex;justify-content:center;padding:10px 0 30px 0;}
+  #voucherDoc{
+    width:210mm;min-height:200mm;background:#fff;padding:16mm 16mm 14mm 16mm;
+    box-shadow:0 4px 24px rgba(0,0,0,.12);
+  }
+  input[readonly]{background:#f3efe4;color:var(--muted);cursor:not-allowed;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-mini"><img src="/assets/dds-logo-mark.png" alt="DDS"></div>
+  <div>
+    <h1>DDS Marine — Payment Voucher Generator</h1>
+    <p>DDS's own record of money paid out · <a href="/">← Dashboard</a> · <a href="/archive.html">Archive</a></p>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="card" id="formArea">
+    <h2 id="formHeading">New Payment Voucher</h2>
+    <p class="sub">Records a payment DDS made — to a vendor, a pilot or contractor, a director item, or a transfer — for the MD to sign off. Keep the bank slip with it. Downloads as a <strong>vector PDF</strong>, same as invoices and receipts.</p>
+
+    <div class="grid3">
+      <div class="field"><label>Voucher #</label><input type="text" id="pvNumber"><p class="hint">Runs per year from the voucher date.</p></div>
+      <div class="field"><label>Date</label><input type="date" id="pvDate"></div>
+      <div class="field"><label>Bank Ref</label><input type="text" id="pvBankRef" placeholder="e.g. GEB, EB, PSM"></div>
+    </div>
+
+    <div class="field"><label>Paid To</label><input type="text" id="pvPayee" placeholder="Vendor, contractor or person paid"></div>
+
+    <div class="grid3">
+      <div class="field"><label>Amount Paid</label><input type="number" id="pvAmount" min="0" step="0.01"></div>
+      <div class="field">
+        <label>Currency</label>
+        <select id="pvCurrency">
+          <option value="MYR">MYR (RM)</option>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="pvCategory">
+          <option value="Vendor">Vendor / Supplier</option>
+          <option value="Individual">Individual / Contractor</option>
+          <option value="Director">Director / Personal</option>
+          <option value="Transfer">Inter-company Transfer</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Being Payment For</label>
+      <textarea id="pvDescription" rows="2" placeholder="e.g. Pilot boat charges, March 2026"></textarea>
+    </div>
+
+    <div class="grid2">
+      <div class="field"><label>Approved By</label><input type="text" id="pvApproverName"></div>
+      <div class="field"><label>Title</label><input type="text" id="pvApproverTitle"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-gold" id="generateBtn">Generate Voucher →</button>
+    </div>
+  </div>
+
+  <!-- Voucher preview -->
+  <div class="hidden" id="previewArea">
+    <div class="btn-row" style="margin-bottom:14px;">
+      <button class="btn btn-outline" id="backToEditBtn">← Back to Edit</button>
+      <button class="btn btn-gold" id="downloadPdfBtn">Download PDF</button>
+      <button class="btn btn-outline" id="printBtn">Print</button>
+      <button class="btn btn-primary" id="saveArchiveBtn">Save to Archive (→ Drive)</button>
+    </div>
+    <div class="voucher-wrap"><div id="voucherDoc"></div></div>
+  </div>
+
+</div>
+
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/pdf-docs.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const DEFAULT_APPROVER = 'Capt. Dinesh Naidu';
+  const DEFAULT_TITLE = 'Managing Director';
+  const CATEGORY_LABEL = {
+    Vendor: 'Vendor / Supplier Payment', Individual: 'Individual / Contractor Payment',
+    Director: 'Director / Personal', Transfer: 'Inter-company Transfer', Other: 'Other Payment'
+  };
+
+  async function apiGet(url){
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('GET '+url+' failed ('+r.status+')');
+    return r.json();
+  }
+  async function apiPost(url, body){
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if(!r.ok){
+      let detail = '';
+      try{ detail = (await r.json()).error || ''; }catch(e){}
+      throw new Error(detail || ('POST '+url+' failed ('+r.status+')'));
+    }
+    return r.json();
+  }
+
+  const $ = id => document.getElementById(id);
+  let settings = {};
+  let currentVoucher = null;
+  let editing = false;
+  // Once someone types their own voucher number, stop replacing it when the date changes.
+  let numberTouched = false;
+
+  async function suggestNumber(){
+    if(editing || numberTouched) return;
+    const year = ($('pvDate').value || '').slice(0,4) || String(new Date().getFullYear());
+    try{
+      const r = await apiGet('/api/vouchers/next-number?year=' + encodeURIComponent(year));
+      if(!numberTouched) $('pvNumber').value = r.next;
+    }catch(e){ console.error(e); }
+  }
+
+  async function init(){
+    try{ const s = await apiGet('/api/invoice-settings'); if(s && Object.keys(s).length) settings = s; }catch(e){ console.error(e); }
+
+    // Arriving from the Archive's "Edit" button: reopen the voucher under its
+    // own (locked) number, so saving replaces the archived copy.
+    const editId = new URLSearchParams(location.search).get('edit');
+    if(editId){
+      try{
+        const v = await apiGet('/api/vouchers/' + encodeURIComponent(editId));
+        editing = true;
+        $('formHeading').textContent = 'Edit Voucher ' + v.voucherNumber;
+        $('pvNumber').value = v.voucherNumber;
+        $('pvNumber').readOnly = true;
+        $('pvDate').value = v.date || '';
+        $('pvBankRef').value = v.bankRef || '';
+        $('pvPayee').value = v.payeeName || '';
+        $('pvAmount').value = v.amount;
+        $('pvCurrency').value = v.currency === 'USD' ? 'USD' : 'MYR';
+        $('pvCategory').value = v.category || 'Other';
+        $('pvDescription').value = v.description || '';
+        $('pvApproverName').value = v.approverName || '';
+        $('pvApproverTitle').value = v.approverTitle || '';
+        history.replaceState(null, '', location.pathname);
+        return;
+      }catch(e){
+        console.error(e);
+        alert('Could not load that voucher to edit.');
+        history.replaceState(null, '', location.pathname);
+      }
+    }
+
+    $('pvDate').value = new Date().toISOString().slice(0,10);
+    $('pvApproverName').value = DEFAULT_APPROVER;
+    $('pvApproverTitle').value = DEFAULT_TITLE;
+    await suggestNumber();
+  }
+
+  $('pvNumber').oninput = ()=>{ numberTouched = true; };
+  $('pvDate').onchange = suggestNumber;
+
+  function rm(n, currency){ return (currency === 'USD' ? 'USD ' : 'RM ') + (Number(n)||0).toLocaleString('en-MY', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  const escapeHtml = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function collectVoucher(){
+    return {
+      voucherNumber: $('pvNumber').value.trim(),
+      date: $('pvDate').value,
+      payeeName: $('pvPayee').value.trim(),
+      amount: Number($('pvAmount').value)||0,
+      currency: $('pvCurrency').value,
+      category: $('pvCategory').value,
+      bankRef: $('pvBankRef').value.trim(),
+      description: $('pvDescription').value.trim(),
+      approverName: $('pvApproverName').value.trim(),
+      approverTitle: $('pvApproverTitle').value.trim()
+    };
+  }
+
+  $('generateBtn').onclick = ()=>{
+    const voucher = collectVoucher();
+    if(!voucher.voucherNumber){ alert('Please enter a voucher number.'); return; }
+    if(!voucher.payeeName){ alert('Please enter who the payment was made to.'); return; }
+    currentVoucher = voucher;
+    renderPreviewDoc(voucher);
+    $('formArea').classList.add('hidden');
+    $('previewArea').classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+
+  $('backToEditBtn').onclick = ()=>{
+    $('previewArea').classList.add('hidden');
+    $('formArea').classList.remove('hidden');
+  };
+
+  function renderPreviewDoc(v){
+    $('voucherDoc').innerHTML = `
+      <div style="font-family:'Helvetica Neue',Arial,sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+          <img src="/assets/dds-logo.png" style="width:170px;" alt="DDS">
+          <div style="text-align:right;">
+            <div style="font-size:19px;color:#444;">Payment Voucher</div>
+            <div style="font-weight:700;color:#0E2240;">${escapeHtml(settings.companyName||'')}</div>
+          </div>
+        </div>
+        <div style="background:#F7F3EA;border-radius:8px;padding:14px 16px;margin-bottom:14px;">
+          <div style="font-size:10px;letter-spacing:.08em;color:#C8973F;font-weight:700;">PAID TO</div>
+          <div style="font-size:15px;font-weight:700;color:#0E2240;">${escapeHtml(v.payeeName)}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:6px;">Voucher ${escapeHtml(v.voucherNumber)} · ${escapeHtml(v.date)} · Ref: ${escapeHtml(v.bankRef||'—')}</div>
+        </div>
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#8a6420;text-transform:uppercase;">${escapeHtml(CATEGORY_LABEL[v.category]||'Other Payment')}</div>
+        <div style="background:#F7F3EA;border:1.5px solid #C8973F;border-radius:8px;padding:14px 16px;margin:14px 0;">
+          <div style="font-size:11px;font-weight:700;color:#0E2240;">AMOUNT PAID</div>
+          <div style="font-size:24px;font-weight:800;color:#0E2240;text-align:right;">${rm(v.amount, v.currency)}</div>
+          <div style="font-size:11px;color:#6b7280;text-align:right;">${escapeHtml(DDSPdf.amountInWords(v.amount, v.currency))}</div>
+        </div>
+        ${v.description ? `<div style="font-size:12.5px;"><strong>Being payment for:</strong> ${escapeHtml(v.description)}</div>` : ''}
+        <div style="margin-top:60px;width:260px;">
+          <div style="font-size:10px;letter-spacing:.08em;color:#C8973F;font-weight:700;margin-bottom:46px;">APPROVED BY</div>
+          <div style="border-top:1px solid #1c1c1c;padding-top:6px;font-weight:700;color:#0E2240;font-size:13px;">${escapeHtml(v.approverName)}</div>
+          <div style="font-size:12px;color:#6b7280;">${escapeHtml(v.approverTitle)}</div>
+          <div style="font-size:12px;color:#6b7280;margin-top:8px;">Date: ____________________</div>
+        </div>
+      </div>`;
+  }
+
+  function buildPdf(){
+    return DDSPdf.buildVoucher({ settings, voucher: currentVoucher });
+  }
+
+  $('printBtn').onclick = ()=> window.print();
+
+  $('downloadPdfBtn').onclick = ()=>{
+    try{
+      buildPdf().save(`Voucher_${currentVoucher.voucherNumber}.pdf`);
+    }catch(err){
+      console.error(err);
+      alert('PDF generation failed.');
+    }
+  };
+
+  $('saveArchiveBtn').onclick = async ()=>{
+    const btn = $('saveArchiveBtn');
+    const original = btn.textContent;
+    if(!currentVoucher) return;
+    btn.textContent = 'Saving…'; btn.disabled = true;
+    try{
+      const pdfBase64 = buildPdf().output('datauristring');
+      const res = await apiPost('/api/vouchers', { ...currentVoucher, pdfBase64 });
+      btn.textContent = res && res.replaced ? 'Archive updated ✓' : 'Saved to Archive ✓';
+    }catch(err){
+      console.error(err);
+      btn.textContent = 'Save failed';
+      alert('Could not save to the archive.\n\n' + (err && err.message ? err.message : err));
+    }finally{
+      btn.disabled = false;
+      setTimeout(()=>{ btn.textContent = original; }, 2500);
+    }
+  };
+
+  init();
+})();
+</script>
+</body>
+</html>

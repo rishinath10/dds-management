@@ -18,8 +18,9 @@ public/
   payslip.html             Payslip generator (staff, EPF/SOCSO/EIS calc)
   invoice.html             Invoice generator (clients, line items)
   receipt.html             Official Receipt generator (money received)
+  voucher.html             Payment Voucher generator (money paid out)
   archive.html             Browse/search everything archived, reopen PDFs
-  pdf-docs.js              Draws the payslip + invoice + receipt as vector PDFs
+  pdf-docs.js              Draws the payslip, invoice, receipt + voucher as vector PDFs
   assets/dds-logo.png       Full logo + tagline (used on invoices)
   assets/dds-logo-mark.png  Diamond mark only (used in small circular badges)
   vendor/                   jsPDF, vendored (see vendor/README.md)
@@ -29,12 +30,13 @@ scripts/
   dds-logo-mark.png        The DDS logo artwork the vector mark is traced from
 data/                     employees.json, clients.json, company.json,
                            invoice_settings.json, payslips.json, invoices.json,
-                           receipts.json
+                           receipts.json, vouchers.json
                            (all auto-created on first run)
 pdfs/
   payslips/                Generated payslip PDFs land here
   invoices/                 Generated invoice PDFs land here
   receipts/                 Generated receipt PDFs land here
+  vouchers/                 Generated payment voucher PDFs land here
                            — this whole pdfs/ tree is what rclone syncs to Drive
 ```
 
@@ -406,6 +408,13 @@ so a repeat job for the same vessel is a couple of clicks.
 category (Invoice / Capital / Refund / Other) → if it's an Invoice-category
 receipt, optionally pick the matching invoice from the dropdown → Generate →
 Download (to send) → Save to Archive (to keep a copy in Drive).
+
+**Payment vouchers:** Dashboard → Payment Vouchers → set the date first (the
+voucher number follows it: PV-2025-001, PV-2025-002 … then PV-2026-001 for
+the next year) → fill in who was paid, the amount, the bank ref and the
+category (Vendor / Individual / Director / Transfer / Other) → Generate →
+Save to Archive. The PDF prints the amount in words and an "Approved by"
+line for the MD to sign; keep the bank slip with the signed copy.
 
 **Finding an old document:** Dashboard → Archive, then search by staff name,
 month, client, invoice number, payer name or receipt category.
