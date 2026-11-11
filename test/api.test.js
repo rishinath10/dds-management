@@ -408,6 +408,59 @@ test('deleting a receipt whose PDF is already missing from disk still succeeds',
   assert.strictEqual(del.status, 200, 'a missing file on disk should not block deleting the record');
 });
 
+// ---------------------------------------------------------------- payment vouchers
+
+test('archives a payment voucher and serves the PDF back intact', async () => {
+  const saved = await (await postJson('/api/vouchers', {
+    voucherNumber: '1', date: '2026-04-04', payeeName: 'Ravindran A/L Chandran',
+    amount: 25000, category: 'Pilotage', bankRef: 'GEB', remarks: 'Pilotage fees - February 2026',
+    pdfBase64: PDF_DATA_URI
+  })).json();
+  assert.strictEqual(saved.ok, true);
+  assert.strictEqual(saved.filename, 'Voucher_1.pdf');
+
+  const fetched = await (await api('/api/vouchers/' + saved.id)).json();
+  assert.strictEqual(fetched.category, 'Pilotage');
+  assert.strictEqual(fetched.currency, 'MYR');
+
+  const bytes = Buffer.from(await (await api(`/api/vouchers/${saved.id}/pdf`)).arrayBuffer());
+  assert.deepStrictEqual(bytes, PDF_BYTES);
+
+  const { next } = await (await api('/api/vouchers/next-number')).json();
+  assert.ok(next >= 2, 'next-number must not be shadowed by the /:id route');
+});
+
+test('rejects a voucher with an invalid category or currency', async () => {
+  const base = { voucherNumber: 'X1', payeeName: 'Someone', amount: 1, pdfBase64: PDF_DATA_URI };
+  assert.strictEqual((await postJson('/api/vouchers', { ...base, category: 'Bogus' })).status, 400);
+  assert.strictEqual((await postJson('/api/vouchers', { ...base, currency: 'EUR' })).status, 400);
+  assert.strictEqual((await postJson('/api/vouchers', { voucherNumber: 'X2', amount: 1, pdfBase64: PDF_DATA_URI })).status, 400);
+});
+
+test('re-saving a voucher number replaces it (how Edit saves)', async () => {
+  const body = { voucherNumber: '50', payeeName: 'KSL Marine Services', amount: 7800, category: 'Marine', pdfBase64: PDF_DATA_URI };
+  const first = await (await postJson('/api/vouchers', body)).json();
+  const second = await (await postJson('/api/vouchers', { ...body, remarks: 'Pilot boat charges' })).json();
+  assert.strictEqual(second.replaced, true);
+  assert.strictEqual(second.id, first.id);
+  const all = await (await api('/api/vouchers?category=Marine')).json();
+  assert.strictEqual(all.filter(v => v.voucherNumber === '50').length, 1);
+  assert.strictEqual(all.find(v => v.voucherNumber === '50').remarks, 'Pilot boat charges');
+});
+
+test('deletes a voucher: record disappears and the PDF is removed from disk', async () => {
+  const saved = await (await postJson('/api/vouchers', {
+    voucherNumber: '60', payeeName: 'Delete Me', amount: 10, pdfBase64: PDF_DATA_URI
+  })).json();
+  const filePath = path.join(tmpDir, 'pdfs', 'vouchers', saved.filename);
+  assert.ok(fs.existsSync(filePath));
+  assert.strictEqual((await api('/api/vouchers/' + saved.id, { method: 'DELETE' })).status, 200);
+  assert.strictEqual((await api('/api/vouchers/' + saved.id)).status, 404);
+  assert.ok(!fs.existsSync(filePath));
+  assert.strictEqual((await api('/api/vouchers/pv_nope', { method: 'DELETE' })).status, 404);
+  assert.strictEqual((await api('/api/vouchers/pv_nope/pdf')).status, 404);
+});
+
 // ---------------------------------------------------------------- currency
 
 test('invoices and receipts store their currency, defaulting to MYR', async () => {
@@ -481,5 +534,6 @@ test('reports dashboard stats', async () => {
   assert.ok(stats.clients > 0);
   assert.ok(stats.invoices > 0);
   assert.ok(stats.receipts > 0);
+  assert.ok(stats.vouchers > 0);
   assert.strictEqual(typeof stats.invoicedTotal, 'number');
 });

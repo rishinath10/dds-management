@@ -14,6 +14,7 @@ const PDF_DIR = process.env.DDS_PDF_DIR || path.join(__dirname, 'pdfs');
 const PDF_PAYSLIPS_DIR = path.join(PDF_DIR, 'payslips');
 const PDF_INVOICES_DIR = path.join(PDF_DIR, 'invoices');
 const PDF_RECEIPTS_DIR = path.join(PDF_DIR, 'receipts');
+const PDF_VOUCHERS_DIR = path.join(PDF_DIR, 'vouchers');
 
 const EMP_FILE = path.join(DATA_DIR, 'employees.json');
 const COMPANY_FILE = path.join(DATA_DIR, 'company.json');
@@ -22,9 +23,10 @@ const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
 const INVOICE_SETTINGS_FILE = path.join(DATA_DIR, 'invoice_settings.json');
 const INVOICES_FILE = path.join(DATA_DIR, 'invoices.json');
 const RECEIPTS_FILE = path.join(DATA_DIR, 'receipts.json');
+const VOUCHERS_FILE = path.join(DATA_DIR, 'vouchers.json');
 
 // ---- ensure storage exists ----
-for (const dir of [DATA_DIR, PDF_DIR, PDF_PAYSLIPS_DIR, PDF_INVOICES_DIR, PDF_RECEIPTS_DIR]) {
+for (const dir of [DATA_DIR, PDF_DIR, PDF_PAYSLIPS_DIR, PDF_INVOICES_DIR, PDF_RECEIPTS_DIR, PDF_VOUCHERS_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 function ensureFile(file, defaultContent) {
@@ -72,6 +74,7 @@ ensureFile(INVOICE_SETTINGS_FILE, {
 });
 ensureFile(INVOICES_FILE, []);
 ensureFile(RECEIPTS_FILE, []);
+ensureFile(VOUCHERS_FILE, []);
 
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
@@ -106,6 +109,7 @@ function backfillIds(file, prefix) {
 backfillIds(PAYSLIPS_FILE, 'ps_');
 backfillIds(INVOICES_FILE, 'inv_');
 backfillIds(RECEIPTS_FILE, 'rcpt_');
+backfillIds(VOUCHERS_FILE, 'pv_');
 
 // A receipt's category says what kind of money-in event it records. Only
 // "Invoice" receipts represent trade income and get a linked Invoice record;
@@ -119,6 +123,11 @@ const RECEIPT_CATEGORIES = ['Invoice', 'Capital', 'Refund', 'Other'];
 // currency field and are MYR.
 const CURRENCIES = ['MYR', 'USD'];
 const currencyOf = rec => (rec && rec.currency === 'USD' ? 'USD' : 'MYR');
+
+// What a payment voucher's money went on. Labels for these live in the
+// frontend and pdf-docs.js; keep the three lists in step.
+const VOUCHER_CATEGORIES = ['Pilotage', 'Marine', 'Salary', 'Office', 'Asset',
+                            'Professional', 'Director', 'Transfer', 'Other'];
 
 // Resolve an archived record's PDF and stream it back. The filename always
 // comes from our own stored record, never from the URL, and the resolved path
@@ -541,6 +550,90 @@ app.delete('/api/receipts/:id', (req, res) => {
 });
 
 // =========================================================
+// Payment vouchers (records money paid out)
+// =========================================================
+
+app.get('/api/vouchers/next-number', (req, res) => {
+  const vouchers = readJson(VOUCHERS_FILE) || [];
+  const nums = vouchers
+    .map(v => parseInt(String(v.voucherNumber).replace(/[^0-9]/g, ''), 10))
+    .filter(n => !isNaN(n));
+  res.json({ next: nums.length ? Math.max(...nums) + 1 : 1 });
+});
+
+app.post('/api/vouchers', (req, res) => {
+  const { voucherNumber, date, payeeName, amount, category, bankRef, remarks,
+          currency, pdfBase64 } = req.body || {};
+  if (!pdfBase64 || !voucherNumber || !payeeName) {
+    return res.status(400).json({ error: 'voucherNumber, payeeName and pdfBase64 are required.' });
+  }
+  if (category && !VOUCHER_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: 'category must be one of: ' + VOUCHER_CATEGORIES.join(', ') });
+  }
+  if (currency && !CURRENCIES.includes(currency)) {
+    return res.status(400).json({ error: 'currency must be one of: ' + CURRENCIES.join(', ') });
+  }
+
+  const filename = `Voucher_${safeSegment(voucherNumber, 'unnumbered')}.pdf`;
+  try {
+    writePdfFromBase64(PDF_VOUCHERS_DIR, filename, pdfBase64);
+  } catch (e) {
+    console.error('Failed to write voucher PDF', e);
+    return res.status(500).json({ error: 'Failed to save PDF on server.' });
+  }
+
+  const vouchers = readJson(VOUCHERS_FILE) || [];
+  // Same number = same voucher: replace it (this is how Edit saves).
+  const existingIdx = vouchers.findIndex(v => String(v.voucherNumber) === String(voucherNumber));
+  const record = {
+    id: existingIdx > -1 ? vouchers[existingIdx].id : 'pv_' + crypto.randomUUID(),
+    voucherNumber,
+    date: date || '',
+    payeeName,
+    currency: currency || 'MYR',
+    amount,
+    category: category || 'Other',
+    bankRef: bankRef || '',
+    remarks: remarks || '',
+    filename,
+    savedAt: new Date().toISOString()
+  };
+  if (existingIdx > -1) vouchers[existingIdx] = record; else vouchers.push(record);
+  writeJson(VOUCHERS_FILE, vouchers);
+
+  res.json({ ok: true, filename, id: record.id, replaced: existingIdx > -1 });
+});
+
+app.get('/api/vouchers', (req, res) => {
+  const vouchers = readJson(VOUCHERS_FILE) || [];
+  const { category } = req.query;
+  res.json(category ? vouchers.filter(v => v.category === category) : vouchers);
+});
+
+app.get('/api/vouchers/:id', (req, res) => {
+  const found = (readJson(VOUCHERS_FILE) || []).find(v => v.id === req.params.id);
+  if (!found) return res.status(404).json({ error: 'Voucher not found.' });
+  res.json(found);
+});
+
+app.get('/api/vouchers/:id/pdf', (req, res) => {
+  const vouchers = readJson(VOUCHERS_FILE) || [];
+  sendArchivedPdf(res, PDF_VOUCHERS_DIR, vouchers.find(v => v.id === req.params.id));
+});
+
+app.delete('/api/vouchers/:id', (req, res) => {
+  const vouchers = readJson(VOUCHERS_FILE) || [];
+  const record = vouchers.find(v => v.id === req.params.id);
+  if (!record) return res.status(404).json({ error: 'Voucher not found.' });
+  if (record.filename) {
+    try { fs.unlinkSync(path.join(PDF_VOUCHERS_DIR, record.filename)); }
+    catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  writeJson(VOUCHERS_FILE, vouchers.filter(v => v.id !== req.params.id));
+  res.json({ ok: true });
+});
+
+// =========================================================
 // Dashboard stats
 // =========================================================
 app.get('/api/stats', (req, res) => {
@@ -559,6 +652,7 @@ app.get('/api/stats', (req, res) => {
     payslips: payslips.length,
     invoices: invoices.length,
     receipts: receipts.length,
+    vouchers: (readJson(VOUCHERS_FILE) || []).length,
     payslipsThisMonth: payslips.filter(p => p.payMonth === thisMonth).length,
     invoicedThisMonth,
     invoicedTotal: sumTotals(myrInvoices),

@@ -102,6 +102,7 @@
     <button class="tab active" id="tabPayslips" data-view="payslips">Payslips <span class="count" id="countPayslips">0</span></button>
     <button class="tab" id="tabInvoices" data-view="invoices">Invoices <span class="count" id="countInvoices">0</span></button>
     <button class="tab" id="tabReceipts" data-view="receipts">Receipts <span class="count" id="countReceipts">0</span></button>
+    <button class="tab" id="tabVouchers" data-view="vouchers">Vouchers <span class="count" id="countVouchers">0</span></button>
   </div>
 
   <div class="toolbar">
@@ -114,6 +115,7 @@
   <div class="note" id="noteEl"></div>
 </div>
 
+<script src="/pdf-docs.js"></script>
 <script>
 (function(){
   "use strict";
@@ -126,6 +128,14 @@
   let payslips = [];
   let invoices = [];
   let receipts = [];
+  let vouchers = [];
+  const listFor = v => ({ payslips, invoices, receipts, vouchers })[v];
+  function updateCounts(){
+    $('countPayslips').textContent = payslips.length;
+    $('countInvoices').textContent = invoices.length;
+    $('countReceipts').textContent = receipts.length;
+    $('countVouchers').textContent = vouchers.length;
+  }
 
   async function apiGet(url){
     const r = await fetch(url);
@@ -162,10 +172,11 @@
 
   async function load(){
     try{
-      [payslips, invoices, receipts] = await Promise.all([
+      [payslips, invoices, receipts, vouchers] = await Promise.all([
         apiGet('/api/payslips'),
         apiGet('/api/invoices'),
-        apiGet('/api/receipts')
+        apiGet('/api/receipts'),
+        apiGet('/api/vouchers')
       ]);
     }catch(e){
       console.error(e);
@@ -176,9 +187,8 @@
     payslips = payslips.slice().sort(byNewest);
     invoices = invoices.slice().sort(byNewest);
     receipts = receipts.slice().sort(byNewest);
-    $('countPayslips').textContent = payslips.length;
-    $('countInvoices').textContent = invoices.length;
-    $('countReceipts').textContent = receipts.length;
+    vouchers = vouchers.slice().sort(byNewest);
+    updateCounts();
     render();
   }
 
@@ -188,7 +198,9 @@
       ? [record.employeeName, record.payMonth, monthLabel(record.payMonth), record.filename]
       : view === 'invoices'
       ? [record.invoiceNumber, record.clientName, record.filename, record.notes]
-      : [record.receiptNumber, record.payerName, record.category, record.linkedInvoiceNumber, record.bankRef, record.remarks, record.filename];
+      : view === 'receipts'
+      ? [record.receiptNumber, record.payerName, record.category, record.linkedInvoiceNumber, record.bankRef, record.remarks, record.filename]
+      : [record.voucherNumber, record.payeeName, record.category, VOUCHER_LABELS[record.category], record.bankRef, record.remarks, record.filename];
     return haystack.filter(Boolean).join(' ').toLowerCase().includes(term);
   }
 
@@ -266,9 +278,45 @@
     }).join('');
   }
 
+  const VOUCHER_LABELS = DDSPdf.voucherCategoryLabels;
+
+  function renderVoucherRows(rows){
+    return rows.map(v => `
+      <tr>
+        <td>
+          <div class="primary">#${escapeHtml(v.voucherNumber)}</div>
+          <div class="secondary">${escapeHtml(v.filename || '')}</div>
+        </td>
+        <td>
+          <div>${escapeHtml(v.payeeName || '—')}</div>
+          <span class="cat-chip cat-Other">${escapeHtml(VOUCHER_LABELS[v.category] || v.category || 'Other')}</span>
+        </td>
+        <td>${escapeHtml(dateLabel(v.date || v.savedAt))}</td>
+        <td class="num"><strong>${rm(v.amount, v.currency)}</strong></td>
+        <td>${escapeHtml(savedLabel(v.savedAt))}</td>
+        <td class="actions">
+          <a class="link-btn" href="/api/vouchers/${encodeURIComponent(v.id)}/pdf" target="_blank" rel="noopener">View PDF</a>
+          <a class="link-btn gold" href="/voucher.html?edit=${encodeURIComponent(v.id)}" title="Change this voucher; saving replaces the archived copy">Edit</a>
+          <button class="link-btn danger" data-delete="vouchers" data-id="${escapeHtml(v.id)}" data-label="${escapeHtml('Voucher #' + v.voucherNumber + ' — ' + (v.payeeName||''))}">Delete</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  const VIEWS = {
+    payslips: { icon: '🧾', noun: 'payslip', rows: renderPayslipRows,
+      head: `<tr><th>Employee</th><th>Pay period</th><th class="num">Gross</th><th class="num">Net pay</th><th>Archived</th><th></th></tr>` },
+    invoices: { icon: '📄', noun: 'invoice', rows: renderInvoiceRows,
+      head: `<tr><th>Invoice</th><th>Client</th><th>Date</th><th class="num">Total</th><th>Archived</th><th></th></tr>` },
+    receipts: { icon: '🧾', noun: 'receipt', rows: renderReceiptRows,
+      head: `<tr><th>Receipt</th><th>Received From</th><th>Date</th><th class="num">Amount</th><th>Archived</th><th></th></tr>` },
+    vouchers: { icon: '💸', noun: 'payment voucher', rows: renderVoucherRows,
+      head: `<tr><th>Voucher</th><th>Paid To</th><th>Date</th><th class="num">Amount</th><th>Archived</th><th></th></tr>` }
+  };
+
   function render(){
     const term = $('searchBox').value.trim().toLowerCase();
-    const source = view === 'payslips' ? payslips : view === 'invoices' ? invoices : receipts;
+    const source = listFor(view);
+    const cfg = VIEWS[view];
     const rows = source.filter(r => matches(r, term));
 
     $('tally').textContent = term
@@ -276,8 +324,7 @@
       : `${source.length} archived`;
 
     if(!source.length){
-      const icon = view === 'payslips' ? '🧾' : view === 'invoices' ? '📄' : '🧾';
-      const noun = view === 'payslips' ? 'payslip' : view === 'invoices' ? 'invoice' : 'receipt';
+      const icon = cfg.icon, noun = cfg.noun;
       $('panel').innerHTML = `
         <div class="empty-state">
           <div class="big-icon">${icon}</div>
@@ -294,15 +341,7 @@
       return;
     }
 
-    const head = view === 'payslips'
-      ? `<tr><th>Employee</th><th>Pay period</th><th class="num">Gross</th><th class="num">Net pay</th><th>Archived</th><th></th></tr>`
-      : view === 'invoices'
-      ? `<tr><th>Invoice</th><th>Client</th><th>Date</th><th class="num">Total</th><th>Archived</th><th></th></tr>`
-      : `<tr><th>Receipt</th><th>Received From</th><th>Date</th><th class="num">Amount</th><th>Archived</th><th></th></tr>`;
-
-    $('panel').innerHTML = `<table class="list"><thead>${head}</thead><tbody>${
-      view === 'payslips' ? renderPayslipRows(rows) : view === 'invoices' ? renderInvoiceRows(rows) : renderReceiptRows(rows)
-    }</tbody></table>`;
+    $('panel').innerHTML = `<table class="list"><thead>${cfg.head}</thead><tbody>${cfg.rows(rows)}</tbody></table>`;
   }
 
   document.querySelectorAll('.tab').forEach(btn => {
@@ -330,10 +369,9 @@
       await apiDelete(`/api/${kind}/${encodeURIComponent(id)}`);
       if(kind === 'payslips') payslips = payslips.filter(p => p.id !== id);
       else if(kind === 'invoices') invoices = invoices.filter(i => i.id !== id);
-      else receipts = receipts.filter(r => r.id !== id);
-      $('countPayslips').textContent = payslips.length;
-      $('countInvoices').textContent = invoices.length;
-      $('countReceipts').textContent = receipts.length;
+      else if(kind === 'receipts') receipts = receipts.filter(r => r.id !== id);
+      else vouchers = vouchers.filter(v => v.id !== id);
+      updateCounts();
       render();
     }catch(err){
       console.error(err);

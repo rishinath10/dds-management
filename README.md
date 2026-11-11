@@ -1,7 +1,7 @@
 # DDS Marine — Dashboard (self-hosted)
 
-A small Node/Express app with four modules — **Payslips**, **Invoices**,
-**Receipts** and **Archive** — all with DDS branding, all downloadable as
+A small Node/Express app with five modules — **Payslips**, **Invoices**,
+**Receipts**, **Payment Vouchers** and **Archive** — all with DDS branding, all downloadable as
 PDF, all archived to Google Drive via `rclone`. Staff and client data live in
 JSON files on your VPS.
 
@@ -18,8 +18,9 @@ public/
   payslip.html             Payslip generator (staff, EPF/SOCSO/EIS calc)
   invoice.html             Invoice generator (clients, line items)
   receipt.html             Official Receipt generator (money received)
+  voucher.html             Payment Voucher generator (money paid out)
   archive.html             Browse/search everything archived, reopen PDFs
-  pdf-docs.js              Draws the payslip + invoice + receipt as vector PDFs
+  pdf-docs.js              Draws payslips, invoices, receipts, vouchers as vector PDFs
   assets/dds-logo.png       Full logo + tagline (used on invoices)
   assets/dds-logo-mark.png  Diamond mark only (used in small circular badges)
   vendor/                   jsPDF, vendored (see vendor/README.md)
@@ -29,12 +30,13 @@ scripts/
   dds-logo-mark.png        The DDS logo artwork the vector mark is traced from
 data/                     employees.json, clients.json, company.json,
                            invoice_settings.json, payslips.json, invoices.json,
-                           receipts.json
+                           receipts.json, vouchers.json
                            (all auto-created on first run)
 pdfs/
   payslips/                Generated payslip PDFs land here
   invoices/                 Generated invoice PDFs land here
   receipts/                 Generated receipt PDFs land here
+  vouchers/                 Generated payment voucher PDFs land here
                            — this whole pdfs/ tree is what rclone syncs to Drive
 ```
 
@@ -113,6 +115,16 @@ it's easy to tell real trade income apart from capital injections or refunds
 at a glance — which matters for bookkeeping/audit, since only Invoice-category
 receipts represent revenue. Receipt numbering works the same way invoice
 numbering does (suggested next number, fully editable).
+
+**Payment Vouchers** (`/voucher.html`) are the outgoing counterpart: a record
+of money DDS paid out, with "Paid To", the amount (RM or USD), a category —
+Pilotage & STS Operations, Boats/Equipment & Marine Services, Salary &
+Manpower, Office/Rental & Admin, Asset Purchase, Professional Fees, Director,
+Transfers & Repayments, or Other — and signature lines for Prepared /
+Approved / Received by. They have their own Archive tab with View, Edit and
+Delete. The category list lives in three places that must stay in step:
+`VOUCHER_CATEGORIES` in `server.js` and `VOUCHER_CATEGORY_LABEL` in
+`public/pdf-docs.js` (which `voucher.html` and `archive.html` read).
 
 **Removing staff or clients:** open the profile ("Edit staff profile" /
 "Edit client") and use the delete link at the bottom of the form. Anything
@@ -406,6 +418,10 @@ so a repeat job for the same vessel is a couple of clicks.
 category (Invoice / Capital / Refund / Other) → if it's an Invoice-category
 receipt, optionally pick the matching invoice from the dropdown → Generate →
 Download (to send) → Save to Archive (to keep a copy in Drive).
+
+**Payment vouchers:** Dashboard → Payment Vouchers → who was paid, how
+much, the category and what it was for → Generate → Download/Print (to get
+it signed) → Save to Archive.
 
 **Finding an old document:** Dashboard → Archive, then search by staff name,
 month, client, invoice number, payer name or receipt category.

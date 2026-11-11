@@ -705,10 +705,132 @@
     return pdf;
   }
 
+  // ---------------------------------------------------------------- voucher
+
+  // Keep in step with VOUCHER_CATEGORIES in server.js and voucher.html.
+  var VOUCHER_CATEGORY_LABEL = {
+    Pilotage: 'Pilotage & STS Operations',
+    Marine: 'Boats, Equipment & Marine Services',
+    Salary: 'Salary & Manpower',
+    Office: 'Office, Rental & Admin',
+    Asset: 'Asset Purchase',
+    Professional: 'Professional Fees',
+    Director: 'Director',
+    Transfer: 'Transfers & Repayments',
+    Other: 'Other'
+  };
+
+  function buildVoucher(data) {
+    var jsPDFCtor = (global.jspdf && global.jspdf.jsPDF) || global.jsPDF;
+    var pdf = new jsPDFCtor({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+    var s = data.settings || {};
+    var v = data.voucher || {};
+    var y = MARGIN;
+
+    // ---- header, matching the invoice's ---------------------------------
+    drawLogoMark(pdf, MARGIN + 13, y + 12, 24);
+    setFont(pdf, 'bolditalic', 6, INK);
+    pdf.text('"Fueling Global Trade, Connecting Continents"', MARGIN + 13, y + 28, { align: 'center' });
+
+    setFont(pdf, 'normal', 15, [68, 68, 68]);
+    pdf.text('Payment Voucher', PAGE_W - MARGIN, y + 5, { align: 'right' });
+
+    setFont(pdf, 'bold', 9.5, NAVY);
+    pdf.text(String(s.companyName || ''), PAGE_W - MARGIN, y + 11.5, { align: 'right' });
+
+    setFont(pdf, 'normal', 7.5, MUTED);
+    var hy = y + 16;
+    [s.headerAddressLine1, s.headerAddressLine2, s.headerAddressLine3, s.headerCountry]
+      .filter(Boolean)
+      .forEach(function (line) {
+        pdf.text(String(line), PAGE_W - MARGIN, hy, { align: 'right' });
+        hy += 3.8;
+      });
+    hy += 2;
+    if (s.tradingEmail) { pdf.text(String(s.tradingEmail), PAGE_W - MARGIN, hy, { align: 'right' }); hy += 3.8; }
+    if (s.regLine) { pdf.text(String(s.regLine), PAGE_W - MARGIN, hy, { align: 'right' }); hy += 3.8; }
+
+    y = Math.max(hy, y + 34) + 5;
+
+    // ---- paid-to band ---------------------------------------------------
+    var bandH = 24;
+    band(pdf, MARGIN, y, CONTENT_W, bandH, CREAM, null, 2);
+
+    setFont(pdf, 'bold', 6.5, GOLD);
+    pdf.text('PAID TO', MARGIN + 5, y + 6);
+    setFont(pdf, 'bold', 10, NAVY);
+    pdf.splitTextToSize(String(v.payeeName || ''), 95).slice(0, 2).forEach(function (line, i) {
+      pdf.text(line, MARGIN + 5, y + 11.5 + i * 4.5);
+    });
+
+    var metaRight = PAGE_W - MARGIN - 5;
+    var metaLabelX = metaRight - 32;
+    [['Voucher #', String(v.voucherNumber || '')],
+     ['Date', dateLabel(v.date)],
+     ['Bank Ref', String(v.bankRef || '—')]].forEach(function (row, i) {
+      var ry = y + 7 + i * 5;
+      setFont(pdf, 'normal', 8, MUTED);
+      pdf.text(row[0], metaLabelX, ry, { align: 'right' });
+      setFont(pdf, 'bold', 8, NAVY);
+      pdf.text(row[1], metaRight, ry, { align: 'right' });
+    });
+
+    y += bandH + 10;
+
+    // ---- category -------------------------------------------------------
+    setFont(pdf, 'bold', 7, GOLD);
+    pdf.text(String(VOUCHER_CATEGORY_LABEL[v.category] || v.category || 'Other').toUpperCase(), MARGIN, y);
+    y += 8;
+
+    // ---- amount band ----------------------------------------------------
+    var amtH = 18;
+    band(pdf, MARGIN, y, CONTENT_W, amtH, CREAM, NAVY, 2);
+    setFont(pdf, 'bold', 7.5, NAVY);
+    pdf.text('AMOUNT PAID', MARGIN + 5, y + 6.5);
+    setFont(pdf, 'bold', 18, NAVY);
+    pdf.text(money(v.amount, v.currency), PAGE_W - MARGIN - 5, y + 14.5, { align: 'right' });
+    y += amtH + 10;
+
+    // ---- being payment for ----------------------------------------------
+    if (v.remarks) {
+      setFont(pdf, 'bold', 8, INK);
+      pdf.text('Being payment for:', MARGIN, y);
+      setFont(pdf, 'normal', 8, INK);
+      y = paragraph(pdf, v.remarks, MARGIN + 32, y, CONTENT_W - 32, 4) + 8;
+    }
+
+    // ---- signatures -----------------------------------------------------
+    // Vouchers are signed off on paper, so leave room for the three people
+    // who normally sign one.
+    var sigY = Math.max(y + 20, 215);
+    var sigW = (CONTENT_W - 2 * 10) / 3;
+    ['Prepared by', 'Approved by', 'Received by'].forEach(function (label, i) {
+      var x = MARGIN + i * (sigW + 10);
+      hLine(pdf, x, sigY, x + sigW, INK, 0.25);
+      setFont(pdf, 'bold', 7.5, NAVY);
+      pdf.text(label, x, sigY + 5);
+      setFont(pdf, 'normal', 7, MUTED);
+      pdf.text('Name:', x, sigY + 10);
+      pdf.text('Date:', x, sigY + 15);
+    });
+
+    // ---- footer ---------------------------------------------------------
+    var footY = PAGE_H - MARGIN - 6;
+    hLine(pdf, MARGIN, footY - 4, PAGE_W - MARGIN, LINE, 0.15);
+    setFont(pdf, 'normal', 6.5, MUTED);
+    pdf.text('Payment voucher generated on ' + todayLabel() + '.', PAGE_W / 2, footY, { align: 'center' });
+    pdf.text(String(s.companyName || ''), PAGE_W / 2, footY + 3.5, { align: 'center' });
+
+    return pdf;
+  }
+
   global.DDSPdf = {
     buildPayslip: buildPayslip,
     buildInvoice: buildInvoice,
     buildReceipt: buildReceipt,
+    buildVoucher: buildVoucher,
+    voucherCategoryLabels: VOUCHER_CATEGORY_LABEL,
     // Exposed for tests / reuse.
     money: money,
     monthLabel: monthLabel,
